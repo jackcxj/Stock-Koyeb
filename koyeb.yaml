@@ -1,0 +1,15 @@
+services:
+  - name: a-share-watchtower-api
+    type: web
+    docker:
+      dockerfile: backend/Dockerfile
+    ports:
+      - port: 8000
+        protocol: http
+    env:
+      - key: DEMO_MODE
+        value: "false"
+      - key: ENABLE_AUTO_POLL
+        value: "true"
+      - key: POLL_INTERVAL_SECONDS
+        value: "60"

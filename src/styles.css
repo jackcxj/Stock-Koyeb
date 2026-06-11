@@ -1,0 +1,343 @@
+:root {
+  color: #17202a;
+  background: #f4f7f9;
+  font-family: Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+button, textarea {
+  font: inherit;
+}
+
+.shell {
+  min-height: 100vh;
+  padding: 28px;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  color: #59717f;
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
+h1, h2, p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 32px;
+}
+
+.iconButton, .actions button, .parsedItem button {
+  align-items: center;
+  background: #102a43;
+  border: 0;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.4fr) minmax(280px, 0.9fr);
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #d9e3ea;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.panelTitle {
+  align-items: center;
+  color: #233746;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.panelTitle h2 {
+  font-size: 18px;
+}
+
+.market, .ocr {
+  grid-column: span 1;
+}
+
+.holdings {
+  grid-column: span 1;
+}
+
+.alerts {
+  grid-column: span 1;
+}
+
+.trend {
+  align-items: baseline;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.trend strong {
+  font-size: 34px;
+}
+
+.trend.bullish {
+  background: #ffe8e5;
+  color: #b42318;
+}
+
+.trend.neutral {
+  background: #edf2f7;
+  color: #334e68;
+}
+
+.trend.bearish {
+  background: #e5f5ea;
+  color: #087443;
+}
+
+.stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+
+.compareStrip {
+  background: #f6faf8;
+  border: 1px solid #d7e8df;
+  border-radius: 6px;
+  color: #345044;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr;
+  margin-top: 14px;
+  padding: 10px;
+}
+
+.compareStrip span {
+  color: #607484;
+  font-size: 12px;
+}
+
+.compareStrip strong {
+  font-size: 13px;
+}
+
+.indexBoard {
+  margin-top: 16px;
+}
+
+.indexBoard h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.indexGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.indexTile {
+  border: 1px solid #e0e8ee;
+  border-radius: 6px;
+  padding: 9px;
+}
+
+.indexTile span,
+.indexTile em {
+  color: #617485;
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.indexTile strong {
+  display: block;
+  margin: 4px 0;
+}
+
+.indexTile.up em {
+  color: #b42318;
+}
+
+.indexTile.down em {
+  color: #087443;
+}
+
+.stats div {
+  border-bottom: 1px solid #e6edf2;
+  padding-bottom: 8px;
+}
+
+dt {
+  color: #6b7f8d;
+  font-size: 12px;
+}
+
+dd {
+  font-weight: 700;
+  margin: 3px 0 0;
+}
+
+.statusLine {
+  align-items: center;
+  color: #607484;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.holdingList, .parsedList {
+  display: grid;
+  gap: 10px;
+}
+
+.holdingRow {
+  border-left: 4px solid #8aa4b8;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr auto;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.holdingRow span, .numberBlock span {
+  color: #657786;
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.holdingRow p {
+  color: #3b4b58;
+  font-size: 13px;
+  grid-column: 1 / -1;
+}
+
+.positionMetrics {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.positionMetrics div {
+  background: #fff;
+  border: 1px solid #e3ebf0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.holdingRow.critical, .alertItem.critical {
+  border-color: #c81e1e;
+}
+
+.holdingRow.warning, .alertItem.warning {
+  border-color: #b7791f;
+}
+
+.holdingRow.info, .alertItem.info {
+  border-color: #0f766e;
+}
+
+.alertItem {
+  border-left: 4px solid #8aa4b8;
+  background: #f8fafc;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.alertItem span {
+  font-weight: 700;
+}
+
+.alertItem p {
+  color: #4b5d6b;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+textarea {
+  border: 1px solid #cbd8e1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  min-height: 120px;
+  padding: 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.uploadBox {
+  align-items: center;
+  background: #eef5f8;
+  border: 1px dashed #8aa4b8;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 10px;
+  min-height: 48px;
+}
+
+.uploadBox input {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.ocrStatus {
+  color: #607484;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.actions {
+  margin: 10px 0;
+}
+
+.parsedItem {
+  align-items: center;
+  background: #f8fafc;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
