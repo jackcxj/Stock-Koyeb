@@ -48,10 +48,10 @@ POLL_INTERVAL_SECONDS=60
 
 后台只在 A 股交易时段自动轮询行情：周一到周五 `09:30-11:30`、`13:00-15:00`。非交易时段不主动查询行情；`POST /poll/run-once` 仍可手动调试。
 
-Netlify 前台部署后，需要把 `VITE_BACKEND_URL` 设置为 Koyeb 后端 URL，例如：
+Netlify 前台部署后，需要把 `VITE_BACKEND_URL` 设置为 Render 后端 URL，例如：
 
 ```text
-VITE_BACKEND_URL=https://your-koyeb-service.koyeb.app
+VITE_BACKEND_URL=https://stock-koyeb.onrender.com
 ```
 
 部署命令：

@@ -1,6 +1,6 @@
 import type { HoldingAnalysis, MarketSnapshot } from '../types';
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://stock-koyeb.onrender.com';
 
 export async function fetchLatestMarket(): Promise<MarketSnapshot | null> {
   try {
