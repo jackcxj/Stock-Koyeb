@@ -60,6 +60,12 @@ export interface HoldingAnalysis {
   level: AlertLevel;
   currentPrice: number;
   pnlPercent: number;
+  quantity?: number;
+  availableQuantity?: number;
+  marketValue?: number;
+  pnlAmount?: number;
+  costPrice?: number;
+  stopLossPrice?: number;
   risks: string[];
   growthPoints: string[];
   suggestion: string;

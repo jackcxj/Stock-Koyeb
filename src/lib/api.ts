@@ -48,6 +48,12 @@ export async function fetchHoldingAnalysis(): Promise<HoldingAnalysis[] | null> 
       level: HoldingAnalysis['level'];
       current_price: number;
       pnl_percent: number;
+      quantity?: number;
+      available_quantity?: number;
+      market_value?: number;
+      pnl_amount?: number;
+      cost_price?: number;
+      stop_loss_price?: number;
       risks: string[];
       growth_points: string[];
       suggestion: string;
@@ -58,6 +64,12 @@ export async function fetchHoldingAnalysis(): Promise<HoldingAnalysis[] | null> 
       level: item.level,
       currentPrice: item.current_price,
       pnlPercent: item.pnl_percent,
+      quantity: item.quantity,
+      availableQuantity: item.available_quantity,
+      marketValue: item.market_value,
+      pnlAmount: item.pnl_amount,
+      costPrice: item.cost_price,
+      stopLossPrice: item.stop_loss_price,
       risks: item.risks,
       growthPoints: item.growth_points,
       suggestion: item.suggestion

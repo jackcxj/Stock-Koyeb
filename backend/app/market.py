@@ -120,6 +120,30 @@ async def fetch_akshare_market_snapshot(previous_snapshot: dict[str, Any] | None
     return compare_market_snapshot(current, previous_snapshot)
 
 
+async def fetch_akshare_stock_snapshots(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    import akshare as ak
+
+    spot = ak.stock_zh_a_spot_em()
+    captured_at = datetime.now(CHINA_TZ).isoformat()
+    rows: dict[str, dict[str, Any]] = {}
+    for symbol in symbols:
+        code = _symbol_code(symbol)
+        matched = spot[spot["代码"].astype(str).str.zfill(6) == code]
+        if len(matched) == 0:
+            continue
+        row = matched.iloc[0]
+        normalized = _normalized_symbol(str(row.get("代码", code)))
+        rows[normalized] = {
+            "symbol": normalized,
+            "name": str(row.get("名称", "")),
+            "price": float(row.get("最新价", 0)),
+            "change_percent": float(row.get("涨跌幅", 0)),
+            "volume_ratio": float(row.get("量比", 1) or 1),
+            "captured_at": captured_at,
+        }
+    return rows
+
+
 def _extract_major_indices(index_spot: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for name in MAJOR_INDEX_NAMES:
@@ -145,3 +169,17 @@ def _extract_major_indices(index_spot: Any) -> list[dict[str, Any]]:
             "change_percent": float(index_spot.iloc[0]["涨跌幅"]),
         }
     ]
+
+
+def _symbol_code(symbol: str) -> str:
+    digits = "".join(ch for ch in str(symbol) if ch.isdigit())
+    return digits[:6].zfill(6)
+
+
+def _normalized_symbol(code: str) -> str:
+    compact = _symbol_code(code)
+    if compact.startswith("6"):
+        return f"SH{compact}"
+    if compact.startswith(("8", "4")):
+        return f"BJ{compact}"
+    return f"SZ{compact}"

@@ -17,7 +17,7 @@ export default function App() {
   const [ocrStatus, setOcrStatus] = useState('可上传同花顺持仓截图，系统会按市值、盈亏、持仓/可用、成本/现价解析，结果需人工确认。');
   const [market, setMarket] = useState<MarketSnapshot>(demoMarket);
   const [remoteAnalyses, setRemoteAnalyses] = useState<HoldingAnalysis[] | null>(null);
-  const [dataSourceLabel, setDataSourceLabel] = useState('截图校准演示数据');
+  const [dataSourceLabel, setDataSourceLabel] = useState('后台连接中');
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +27,13 @@ export default function App() {
       if (cancelled) return;
       if (nextMarket) {
         setMarket(nextMarket);
-        setDataSourceLabel('后台实时更新');
+        setDataSourceLabel(
+          nextMarket.sourceStatus === 'ok'
+            ? `后台实时更新 · ${formatChinaDateTime(nextMarket.capturedAt)}`
+            : `后台旧快照 · ${formatChinaDateTime(nextMarket.capturedAt)}`
+        );
+      } else {
+        setDataSourceLabel('后台连接失败，显示本地演示数据');
       }
       if (nextAnalyses) {
         setRemoteAnalyses(nextAnalyses);
@@ -152,7 +158,7 @@ export default function App() {
           </div>
           <div className="holdingList">
             {analyses.map((analysis) => {
-              const holding = holdings.find((item) => item.symbol === analysis.symbol);
+              const holding = holdingFromAnalysis(analysis) ?? holdings.find((item) => item.symbol === analysis.symbol);
               return (
                 <div className={`holdingRow ${analysis.level}`} key={analysis.symbol}>
                   <div>
@@ -258,6 +264,25 @@ function formatShares(holding?: Holding): string {
 function formatCostPrice(holding?: Holding): string {
   if (!holding) return '--';
   return `${holding.costPrice.toFixed(3)}/${(holding.currentPrice ?? holding.costPrice).toFixed(3)}`;
+}
+
+function holdingFromAnalysis(analysis: HoldingAnalysis): Holding | undefined {
+  if (!Number.isFinite(analysis.quantity) || !Number.isFinite(analysis.costPrice)) return undefined;
+  return {
+    id: `remote-${analysis.symbol}`,
+    symbol: analysis.symbol,
+    name: analysis.name,
+    quantity: Number(analysis.quantity),
+    availableQuantity: Number.isFinite(analysis.availableQuantity) ? Number(analysis.availableQuantity) : Number(analysis.quantity),
+    marketValue: analysis.marketValue,
+    pnlAmount: analysis.pnlAmount,
+    pnlPercent: analysis.pnlPercent,
+    currentPrice: analysis.currentPrice,
+    costPrice: Number(analysis.costPrice),
+    stopLossPrice: Number.isFinite(analysis.stopLossPrice) ? Number(analysis.stopLossPrice) : analysis.currentPrice,
+    watchReason: '后台同步持仓',
+    isActive: true
+  };
 }
 
 function stockFromHolding(holding: Holding, market: MarketSnapshot) {

@@ -34,10 +34,23 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "captured_at": "2026-06-11T10:00:00+08:00",
             }
 
-        runtime = PollRuntime(demo_mode=False, market_fetcher=fake_fetcher)
+        async def fake_stock_fetcher(_symbols):
+            return {
+                "SZ002281": {
+                    "symbol": "SZ002281",
+                    "name": "光迅科技",
+                    "price": 205.4,
+                    "change_percent": 1.2,
+                    "volume_ratio": 1.1,
+                    "captured_at": "2026-06-11T10:00:00+08:00",
+                }
+            }
+
+        runtime = PollRuntime(demo_mode=False, market_fetcher=fake_fetcher, stock_fetcher=fake_stock_fetcher)
         result = await runtime.refresh_once()
 
         self.assertEqual(result["id"], "live")
+        self.assertEqual(runtime.latest_stocks["SZ002281"]["price"], 205.4)
         self.assertEqual(runtime.status()["last_source_status"], "ok")
 
 

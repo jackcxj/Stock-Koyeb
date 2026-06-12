@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 from datetime import datetime, time, timedelta, timezone
-from typing import Any
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from .market import demo_market_snapshot, demo_stock_snapshots, fetch_akshare_market_snapshot
+from .market import demo_holdings, demo_market_snapshot, demo_stock_snapshots, fetch_akshare_market_snapshot, fetch_akshare_stock_snapshots
 
 CHINA_TZ = timezone(timedelta(hours=8))
-MarketFetcher = Callable[[dict[str, Any] | None], Awaitable[dict[str, Any]]]
+MarketFetcher = Callable[[Optional[Dict[str, Any]]], Awaitable[Dict[str, Any]]]
+StockFetcher = Callable[[List[str]], Awaitable[Dict[str, Dict[str, Any]]]]
 
 
 def is_a_share_trading_session(now: datetime | None = None) -> bool:
@@ -36,10 +36,12 @@ class PollRuntime:
         *,
         demo_mode: bool,
         market_fetcher: MarketFetcher = fetch_akshare_market_snapshot,
+        stock_fetcher: StockFetcher = fetch_akshare_stock_snapshots,
     ) -> None:
         self.demo_mode = demo_mode
         self.market_fetcher = market_fetcher
-        self.latest_market = demo_market_snapshot()
+        self.stock_fetcher = stock_fetcher
+        self.latest_market = _initial_market_snapshot(demo_mode)
         self.latest_stocks = demo_stock_snapshots()
         self.last_refresh_at: str | None = None
         self.last_error: str | None = None
@@ -52,6 +54,9 @@ class PollRuntime:
                 self.latest_stocks = demo_stock_snapshots()
             else:
                 self.latest_market = await self.market_fetcher(self.latest_market)
+                next_stocks = await self.stock_fetcher([holding["symbol"] for holding in demo_holdings()])
+                if next_stocks:
+                    self.latest_stocks = {**self.latest_stocks, **next_stocks}
             self.refresh_count += 1
             self.last_error = None
             self.last_refresh_at = datetime.now(CHINA_TZ).isoformat()
@@ -99,3 +104,14 @@ def _next_trading_session_start(now: datetime) -> datetime:
         if candidate.weekday() < 5:
             return datetime.combine(candidate.date(), time(9, 30), tzinfo=CHINA_TZ)
         days += 1
+
+
+def _initial_market_snapshot(demo_mode: bool) -> dict[str, Any]:
+    snapshot = demo_market_snapshot()
+    if demo_mode:
+        return snapshot
+    return {
+        **snapshot,
+        "source_status": "stale",
+        "market_status": "等待首次采集",
+    }
