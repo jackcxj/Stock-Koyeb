@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, time, timedelta, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
-from .market import demo_holdings, demo_market_snapshot, demo_stock_snapshots, fetch_akshare_market_snapshot, fetch_akshare_stock_snapshots
+from .market import demo_holdings, demo_market_snapshot, demo_stock_snapshots, fetch_akshare_market_snapshot, fetch_stock_snapshots
 
 CHINA_TZ = timezone(timedelta(hours=8))
-MarketFetcher = Callable[[Optional[Dict[str, Any]]], Awaitable[Dict[str, Any]]]
-StockFetcher = Callable[[List[str]], Awaitable[Dict[str, Dict[str, Any]]]]
+MarketFetcher = Callable[[dict[str, Any] | None], Awaitable[dict[str, Any]]]
+StockFetcher = Callable[[list[str]], Awaitable[dict[str, dict[str, Any]]]]
 
 
 def is_a_share_trading_session(now: datetime | None = None) -> bool:
@@ -36,7 +37,7 @@ class PollRuntime:
         *,
         demo_mode: bool,
         market_fetcher: MarketFetcher = fetch_akshare_market_snapshot,
-        stock_fetcher: StockFetcher = fetch_akshare_stock_snapshots,
+        stock_fetcher: StockFetcher = fetch_stock_snapshots,
     ) -> None:
         self.demo_mode = demo_mode
         self.market_fetcher = market_fetcher
@@ -113,5 +114,5 @@ def _initial_market_snapshot(demo_mode: bool) -> dict[str, Any]:
     return {
         **snapshot,
         "source_status": "stale",
-        "market_status": "等待首次采集",
+        "market_status": "\u7b49\u5f85\u9996\u6b21\u91c7\u96c6",
     }

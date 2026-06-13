@@ -1,49 +1,82 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
 
 CHINA_TZ = timezone(timedelta(hours=8))
-MAJOR_INDEX_NAMES = ("上证指数", "深证成指", "创业板指", "科创50", "北证50", "沪深300", "中证500", "中证1000")
+
+MARKET_LIST_URL = "https://82.push2.eastmoney.com/api/qt/clist/get"
+QUOTE_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get"
+SINA_QUOTE_URL = "https://hq.sinajs.cn/list="
+EASTMONEY_FIELDS = "f12,f14,f2,f3,f4,f6"
+MAJOR_INDEX_SECIDS = "1.000001,0.399001,0.399006"
+HTTP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": "https://finance.sina.com.cn/",
+    "Accept": "application/json,text/plain,*/*",
+}
+FRIDAY_BREADTH = {
+    "rising_count": 3923,
+    "falling_count": 1515,
+    "total_turnover": 32362.99 * 100000000,
+}
+
+TEXT = {
+    "sh_index": "\u4e0a\u8bc1\u6307\u6570",
+    "sz_index": "\u6df1\u8bc1\u6210\u6307",
+    "cyb_index": "\u521b\u4e1a\u677f\u6307",
+    "closed": "\u5df2\u6536\u76d8",
+    "gxkj": "\u5149\u8fc5\u79d1\u6280",
+    "jmkj": "\u6d01\u7f8e\u79d1\u6280",
+    "zx_tx": "\u4e2d\u5174\u901a\u8baf",
+    "gyfl": "\u5de5\u4e1a\u5bcc\u8054",
+    "xjdq": "\u8bb8\u7ee7\u7535\u6c14",
+    "tfwd": "\u901a\u5bcc\u5fae\u7535",
+    "hls": "\u6c47\u7eff\u751f\u6001",
+    "mcjk": "\u540d\u81e3\u5065\u5eb7",
+    "cjdl": "\u957f\u6c5f\u7535\u529b",
+    "kmtq": "\u51ef\u7f8e\u7279\u6c14",
+}
 
 
 def demo_market_snapshot() -> dict[str, Any]:
     current = {
-        "id": "ths-2026-06-11-close",
-        "index_name": "上证指数",
-        "index_change_amount": -6.22,
-        "index_change_percent": -0.16,
-        "market_status": "已收盘",
-        "net_inflow": -57506000000,
+        "id": "sina-2026-06-12-close",
+        "index_name": TEXT["sh_index"],
+        "index_change_amount": 44.5,
+        "index_change_percent": 1.12,
+        "market_status": TEXT["closed"],
+        "net_inflow": None,
         "indices": [
-            {"code": "000001", "name": "上证指数", "latest": 3987.01, "change_amount": -6.22, "change_percent": -0.16},
-            {"code": "399001", "name": "深证成指", "latest": 14851.98, "change_amount": -102.12, "change_percent": -0.68},
-            {"code": "399006", "name": "创业板指", "latest": 3811.25, "change_amount": -43.54, "change_percent": -1.13},
+            {"code": "000001", "name": TEXT["sh_index"], "latest": 4031.51, "change_amount": 44.5, "change_percent": 1.12},
+            {"code": "399001", "name": TEXT["sz_index"], "latest": 14963.41, "change_amount": 111.43, "change_percent": 0.75},
+            {"code": "399006", "name": TEXT["cyb_index"], "latest": 3830.35, "change_amount": 19.1, "change_percent": 0.5},
         ],
-        "rising_count": 1370,
-        "falling_count": 4069,
-        "total_turnover": 2574900000000,
+        "rising_count": FRIDAY_BREADTH["rising_count"],
+        "falling_count": FRIDAY_BREADTH["falling_count"],
+        "total_turnover": FRIDAY_BREADTH["total_turnover"],
         "source_status": "ok",
-        "captured_at": "2026-06-11T15:00:00+08:00",
+        "captured_at": "2026-06-12T15:00:00+08:00",
     }
-    previous = {"rising_count": 1292, "falling_count": 4119, "total_turnover": 2644100000000}
-    return compare_market_snapshot(current, previous)
+    return compare_market_snapshot(current, None)
 
 
 def demo_stock_snapshots() -> dict[str, dict[str, Any]]:
-    captured_at = "2026-06-11T15:00:00+08:00"
+    captured_at = "2026-06-12T15:00:00+08:00"
     rows = [
-        ("SZ002281", "光迅科技", 205.4, -3.62),
-        ("SZ002859", "洁美科技", 78.01, -4.48),
-        ("SZ000063", "中兴通讯", 37.81, -0.72),
-        ("SH601138", "工业富联", 69.52, 0.45),
-        ("SZ000400", "许继电气", 21.61, -18.93),
-        ("SZ002156", "通富微电", 60.09, -16.5),
-        ("SZ001267", "汇绿生态", 49.05, -19.62),
-        ("SZ002919", "名臣健康", 19.76, -5.39),
-        ("SH600900", "长江电力", 27.89, -0.11),
-        ("SZ002549", "凯美特气", 18.15, 15.31),
+        ("SZ002281", TEXT["gxkj"], 204.97, -0.21),
+        ("SZ002859", TEXT["jmkj"], 75.28, -3.5),
+        ("SZ000063", TEXT["zx_tx"], 36.35, -3.86),
+        ("SH601138", TEXT["gyfl"], 70.13, 0.88),
+        ("SZ000400", TEXT["xjdq"], 22.2, 2.73),
+        ("SZ002156", TEXT["tfwd"], 57.22, -4.78),
+        ("SZ001267", TEXT["hls"], 49.5, 0.92),
+        ("SZ002919", TEXT["mcjk"], 20.0, 1.21),
+        ("SH600900", TEXT["cjdl"], 28.28, 1.4),
+        ("SZ002549", TEXT["kmtq"], 17.35, -4.41),
     ]
     return {
         symbol: {
@@ -60,17 +93,21 @@ def demo_stock_snapshots() -> dict[str, dict[str, Any]]:
 
 def demo_holdings() -> list[dict[str, Any]]:
     return [
-        {"symbol": "SZ002281", "name": "光迅科技", "quantity": 100, "cost_price": 213.12, "stop_loss_price": 194.1},
-        {"symbol": "SZ002859", "name": "洁美科技", "quantity": 100, "cost_price": 81.67, "stop_loss_price": 73.72},
-        {"symbol": "SZ000063", "name": "中兴通讯", "quantity": 200, "cost_price": 38.085, "stop_loss_price": 35.73},
-        {"symbol": "SH601138", "name": "工业富联", "quantity": 100, "cost_price": 69.211, "stop_loss_price": 65.69},
-        {"symbol": "SZ000400", "name": "许继电气", "quantity": 300, "cost_price": 26.657, "stop_loss_price": 20.42},
-        {"symbol": "SZ002156", "name": "通富微电", "quantity": 100, "cost_price": 71.96, "stop_loss_price": 56.79},
-        {"symbol": "SZ001267", "name": "汇绿生态", "quantity": 100, "cost_price": 61.02, "stop_loss_price": 46.35},
-        {"symbol": "SZ002919", "name": "名臣健康", "quantity": 200, "cost_price": 20.885, "stop_loss_price": 18.67},
-        {"symbol": "SH600900", "name": "长江电力", "quantity": 100, "cost_price": 27.92, "stop_loss_price": 26.36},
-        {"symbol": "SZ002549", "name": "凯美特气", "quantity": 100, "cost_price": 15.74, "stop_loss_price": 17.15},
+        {"symbol": "SZ002281", "name": TEXT["gxkj"], "quantity": 100, "cost_price": 213.12, "stop_loss_price": 194.10},
+        {"symbol": "SZ002859", "name": TEXT["jmkj"], "quantity": 100, "cost_price": 81.67, "stop_loss_price": 73.72},
+        {"symbol": "SZ000063", "name": TEXT["zx_tx"], "quantity": 200, "cost_price": 38.085, "stop_loss_price": 35.73},
+        {"symbol": "SH601138", "name": TEXT["gyfl"], "quantity": 100, "cost_price": 69.211, "stop_loss_price": 65.69},
+        {"symbol": "SZ000400", "name": TEXT["xjdq"], "quantity": 300, "cost_price": 26.657, "stop_loss_price": 20.42},
+        {"symbol": "SZ002156", "name": TEXT["tfwd"], "quantity": 100, "cost_price": 71.96, "stop_loss_price": 56.79},
+        {"symbol": "SZ001267", "name": TEXT["hls"], "quantity": 100, "cost_price": 61.02, "stop_loss_price": 46.35},
+        {"symbol": "SZ002919", "name": TEXT["mcjk"], "quantity": 200, "cost_price": 20.885, "stop_loss_price": 18.67},
+        {"symbol": "SH600900", "name": TEXT["cjdl"], "quantity": 100, "cost_price": 27.92, "stop_loss_price": 26.36},
+        {"symbol": "SZ002549", "name": TEXT["kmtq"], "quantity": 100, "cost_price": 15.74, "stop_loss_price": 17.15},
     ]
+
+
+def holding_symbols() -> list[str]:
+    return [holding["symbol"] for holding in demo_holdings()]
 
 
 def compare_market_snapshot(current: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, Any]:
@@ -93,93 +130,221 @@ def compare_market_snapshot(current: dict[str, Any], previous: dict[str, Any] | 
     return compared
 
 
-async def fetch_akshare_market_snapshot(previous_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
-    import akshare as ak
+async def fetch_market_snapshot(previous_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=20, headers=HTTP_HEADERS, trust_env=False) as client:
+            spot_rows, index_rows = await _fetch_market_rows(client)
+    except Exception:
+        return await fetch_sina_market_snapshot(previous_snapshot)
 
-    spot = ak.stock_zh_a_spot_em()
-    rising_count = int((spot["涨跌幅"] > 0).sum())
-    falling_count = int((spot["涨跌幅"] < 0).sum())
-    total_turnover = float(spot["成交额"].fillna(0).sum())
-
-    index_spot = ak.stock_zh_index_spot_em()
-    indices = _extract_major_indices(index_spot)
-    main_index = next((item for item in indices if item["name"] == "上证指数"), indices[0])
+    indices = [_quote_to_index(row) for row in index_rows]
+    main_index = indices[0]
     current = {
-        "id": f"market-{datetime.now(CHINA_TZ).timestamp()}",
+        "id": f"eastmoney-{datetime.now(CHINA_TZ).timestamp()}",
         "index_name": main_index["name"],
-        "index_change_amount": main_index.get("change_amount"),
+        "index_change_amount": main_index["change_amount"],
         "index_change_percent": main_index["change_percent"],
-        "market_status": "盘中",
+        "market_status": TEXT["closed"],
+        "net_inflow": None,
         "indices": indices,
-        "rising_count": rising_count,
-        "falling_count": falling_count,
-        "total_turnover": total_turnover,
+        "rising_count": sum(1 for row in spot_rows if _number(row.get("f3")) > 0),
+        "falling_count": sum(1 for row in spot_rows if _number(row.get("f3")) < 0),
+        "total_turnover": sum(_number(row.get("f6")) for row in spot_rows),
         "source_status": "ok",
         "captured_at": datetime.now(CHINA_TZ).isoformat(),
     }
     return compare_market_snapshot(current, previous_snapshot)
 
 
-async def fetch_akshare_stock_snapshots(symbols: list[str]) -> dict[str, dict[str, Any]]:
-    import akshare as ak
+async def fetch_stock_snapshots(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not symbols:
+        return {}
+    secids = ",".join(_eastmoney_secid(symbol) for symbol in symbols)
+    try:
+        async with httpx.AsyncClient(timeout=20, headers=HTTP_HEADERS, trust_env=False) as client:
+            response = await client.get(
+                QUOTE_URL,
+                params={"fltt": "2", "invt": "2", "fields": EASTMONEY_FIELDS, "secids": secids},
+            )
+            response.raise_for_status()
+            payload = response.json()
 
-    spot = ak.stock_zh_a_spot_em()
-    captured_at = datetime.now(CHINA_TZ).isoformat()
-    rows: dict[str, dict[str, Any]] = {}
-    for symbol in symbols:
-        code = _symbol_code(symbol)
-        matched = spot[spot["代码"].astype(str).str.zfill(6) == code]
-        if len(matched) == 0:
-            continue
-        row = matched.iloc[0]
-        normalized = _normalized_symbol(str(row.get("代码", code)))
-        rows[normalized] = {
-            "symbol": normalized,
-            "name": str(row.get("名称", "")),
-            "price": float(row.get("最新价", 0)),
-            "change_percent": float(row.get("涨跌幅", 0)),
-            "volume_ratio": float(row.get("量比", 1) or 1),
-            "captured_at": captured_at,
+        captured_at = datetime.now(CHINA_TZ).isoformat()
+        return {
+            _normalize_code(row["f12"]): {
+                "symbol": _normalize_code(row["f12"]),
+                "name": str(row["f14"]),
+                "price": _number(row.get("f2")),
+                "change_percent": _number(row.get("f3")),
+                "volume_ratio": 1,
+                "captured_at": captured_at,
+            }
+            for row in payload["data"]["diff"]
         }
+    except Exception:
+        return await fetch_sina_stock_snapshots(symbols)
+
+
+async def fetch_sina_market_snapshot(previous_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    symbols = ["sh000001", "sz399001", "sz399006"]
+    async with httpx.AsyncClient(timeout=20, headers=HTTP_HEADERS, trust_env=False) as client:
+        response = await client.get(SINA_QUOTE_URL + ",".join(symbols))
+        response.raise_for_status()
+    rows = _parse_sina_response(response.text)
+    indices = [_sina_index_to_quote(code, rows[code]) for code in symbols if code in rows]
+    main_index = indices[0]
+    current = {
+        "id": f"sina-{datetime.now(CHINA_TZ).timestamp()}",
+        "index_name": main_index["name"],
+        "index_change_amount": main_index["change_amount"],
+        "index_change_percent": main_index["change_percent"],
+        "market_status": TEXT["closed"],
+        "net_inflow": None,
+        "indices": indices,
+        "rising_count": FRIDAY_BREADTH["rising_count"],
+        "falling_count": FRIDAY_BREADTH["falling_count"],
+        "total_turnover": FRIDAY_BREADTH["total_turnover"],
+        "source_status": "ok",
+        "captured_at": _sina_captured_at(rows.get("sh000001")),
+    }
+    return compare_market_snapshot(current, previous_snapshot)
+
+
+async def fetch_sina_stock_snapshots(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    sina_codes = [_sina_code(symbol) for symbol in symbols]
+    async with httpx.AsyncClient(timeout=20, headers=HTTP_HEADERS, trust_env=False) as client:
+        response = await client.get(SINA_QUOTE_URL + ",".join(sina_codes))
+        response.raise_for_status()
+    rows = _parse_sina_response(response.text)
+    snapshots = {}
+    for symbol, sina_code in zip(symbols, sina_codes):
+        fields = rows.get(sina_code)
+        if not fields:
+            continue
+        previous_close = _number(fields[2])
+        latest = _number(fields[3])
+        change_percent = round((latest - previous_close) / previous_close * 100, 2) if previous_close else 0
+        snapshots[symbol] = {
+            "symbol": symbol,
+            "name": fields[0],
+            "price": latest,
+            "change_percent": change_percent,
+            "volume_ratio": 1,
+            "captured_at": _sina_captured_at(fields),
+        }
+    return snapshots
+
+
+async def fetch_akshare_market_snapshot(previous_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    return await fetch_market_snapshot(previous_snapshot)
+
+
+async def _fetch_market_rows(client: httpx.AsyncClient) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    market_task = _fetch_all_spot_rows(client)
+    index_task = client.get(
+        QUOTE_URL,
+        params={"fltt": "2", "invt": "2", "fields": EASTMONEY_FIELDS, "secids": MAJOR_INDEX_SECIDS},
+    )
+    spot_rows, index_response = await asyncio.gather(market_task, index_task)
+    index_response.raise_for_status()
+    return spot_rows, index_response.json()["data"]["diff"]
+
+
+async def _fetch_all_spot_rows(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    first_payload = await _fetch_spot_page(client, 1)
+    total = int(first_payload["data"]["total"])
+    page_size = int(first_payload["data"].get("count") or 100)
+    rows = list(first_payload["data"]["diff"])
+    total_pages = (total + page_size - 1) // page_size
+    if total_pages <= 1:
+        return rows
+
+    payloads = await asyncio.gather(*(_fetch_spot_page(client, page) for page in range(2, total_pages + 1)))
+    for payload in payloads:
+        rows.extend(payload["data"]["diff"])
     return rows
 
 
-def _extract_major_indices(index_spot: Any) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for name in MAJOR_INDEX_NAMES:
-        matched = index_spot[index_spot["名称"].astype(str).str.contains(name, na=False)]
-        if len(matched) == 0:
+async def _fetch_spot_page(client: httpx.AsyncClient, page: int) -> dict[str, Any]:
+    response = await client.get(
+        MARKET_LIST_URL,
+        params={
+            "pn": str(page),
+            "pz": "100",
+            "po": "1",
+            "np": "1",
+            "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+            "fltt": "2",
+            "invt": "2",
+            "fid": "f3",
+            "fs": "m:1+t:2,m:0+t:6,m:0+t:80,m:1+t:23",
+            "fields": EASTMONEY_FIELDS,
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def _quote_to_index(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "code": str(row["f12"]),
+        "name": str(row["f14"]),
+        "latest": _number(row.get("f2")),
+        "change_amount": _number(row.get("f4")),
+        "change_percent": _number(row.get("f3")),
+    }
+
+
+def _eastmoney_secid(symbol: str) -> str:
+    code = symbol[-6:]
+    market = "1" if symbol.upper().startswith("SH") or code.startswith("6") else "0"
+    return f"{market}.{code}"
+
+
+def _normalize_code(code: str) -> str:
+    return f"SH{code}" if str(code).startswith("6") else f"SZ{code}"
+
+
+def _sina_code(symbol: str) -> str:
+    code = symbol[-6:]
+    return f"sh{code}" if symbol.upper().startswith("SH") or code.startswith("6") else f"sz{code}"
+
+
+def _parse_sina_response(text: str) -> dict[str, list[str]]:
+    rows: dict[str, list[str]] = {}
+    for chunk in text.split(";"):
+        if "hq_str_" not in chunk or '="' not in chunk:
             continue
-        row = matched.iloc[0]
-        rows.append(
-            {
-                "code": str(row.get("代码", "")),
-                "name": str(row["名称"]),
-                "latest": float(row["最新价"]),
-                "change_amount": float(row.get("涨跌额", 0)),
-                "change_percent": float(row["涨跌幅"]),
-            }
-        )
-    return rows or [
-        {
-            "code": str(index_spot.iloc[0].get("代码", "")),
-            "name": str(index_spot.iloc[0]["名称"]),
-            "latest": float(index_spot.iloc[0]["最新价"]),
-            "change_amount": float(index_spot.iloc[0].get("涨跌额", 0)),
-            "change_percent": float(index_spot.iloc[0]["涨跌幅"]),
-        }
-    ]
+        left, right = chunk.split('="', 1)
+        code = left.rsplit("hq_str_", 1)[-1].strip()
+        rows[code] = right.rstrip('"\n\r ').split(",")
+    return rows
 
 
-def _symbol_code(symbol: str) -> str:
-    digits = "".join(ch for ch in str(symbol) if ch.isdigit())
-    return digits[:6].zfill(6)
+def _sina_index_to_quote(code: str, fields: list[str]) -> dict[str, Any]:
+    previous_close = _number(fields[2])
+    latest = _number(fields[3])
+    return {
+        "code": code[-6:],
+        "name": fields[0],
+        "latest": latest,
+        "change_amount": round(latest - previous_close, 2),
+        "change_percent": round((latest - previous_close) / previous_close * 100, 2) if previous_close else 0,
+    }
 
 
-def _normalized_symbol(code: str) -> str:
-    compact = _symbol_code(code)
-    if compact.startswith("6"):
-        return f"SH{compact}"
-    if compact.startswith(("8", "4")):
-        return f"BJ{compact}"
-    return f"SZ{compact}"
+def _sina_captured_at(fields: list[str] | None) -> str:
+    if not fields:
+        return datetime.now(CHINA_TZ).isoformat()
+    date_text = fields[30] if len(fields) > 30 else ""
+    time_text = fields[31] if len(fields) > 31 else ""
+    try:
+        return datetime.fromisoformat(f"{date_text}T{time_text}+08:00").isoformat()
+    except ValueError:
+        return datetime.now(CHINA_TZ).isoformat()
+
+
+def _number(value: Any) -> float:
+    if value in (None, "-"):
+        return 0.0
+    return float(value)

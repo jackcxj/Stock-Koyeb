@@ -68,7 +68,11 @@ def analysis_holdings() -> dict[str, object]:
 @app.post("/alerts/test")
 async def alerts_test() -> dict[str, object]:
     settings = get_settings()
-    delivered = await send_wechat_webhook(settings.wechat_webhook_url, "A股监控测试提醒", "这是一条测试消息。")
+    delivered = await send_wechat_webhook(
+        settings.wechat_webhook_url,
+        "\u0041\u80a1\u76d1\u63a7\u6d4b\u8bd5\u63d0\u9192",
+        "\u8fd9\u662f\u4e00\u6761\u6d4b\u8bd5\u6d88\u606f\u3002",
+    )
     return {"ok": True, "wechat_delivered": delivered}
 
 
