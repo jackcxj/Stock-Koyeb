@@ -108,4 +108,49 @@ describe('App', () => {
     expect(within(history).getByText('-5,958.96 元')).toBeInTheDocument();
     expect(within(history).getByText(/总市值 61,640 元/)).toBeInTheDocument();
   });
+
+  it('connects the top reminder button to a WeChat webhook test', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => {
+        const requestUrl = String(url);
+        if (requestUrl.includes('/alerts/test')) {
+          return { wechat_delivered: true, configured: true };
+        }
+        if (requestUrl.includes('/market/latest')) {
+          return {
+            id: 'live-market',
+            index_name: '上证指数',
+            index_change_percent: 0.25,
+            market_status: '盘中',
+            indices: [],
+            rising_count: 2400,
+            falling_count: 2100,
+            total_turnover: 100000000,
+            source_status: 'ok',
+            captured_at: '2026-06-11T10:00:00+08:00'
+          };
+        }
+        return { items: [] };
+      }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '开启提醒' }));
+    fireEvent.change(screen.getByPlaceholderText('Server 酱 SendKey URL 或 PushPlus webhook'), {
+      target: { value: 'https://sctapi.ftqq.com/example.send' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送微信测试' }));
+
+    expect(await screen.findByText('微信测试消息已发送，请在微信里确认。')).toBeInTheDocument();
+    expect(window.localStorage.getItem('a-share-watchtower:wechat-webhook')).toBe('https://sctapi.ftqq.com/example.send');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/alerts/test'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ webhook_url: 'https://sctapi.ftqq.com/example.send' })
+      })
+    );
+  });
 });

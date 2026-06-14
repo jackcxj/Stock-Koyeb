@@ -2,7 +2,7 @@ import { Bell, Cloud, FileImage, Gauge, ShieldAlert, TrendingUp, Upload } from '
 import { useEffect, useMemo, useState } from 'react';
 import type { Holding, HoldingAnalysis, MarketSnapshot, ParsedHolding } from './types';
 import { demoAlerts, demoHoldings, demoMarket, demoStocks } from './lib/demoData';
-import { fetchHoldingAnalysis, fetchLatestMarket } from './lib/api';
+import { fetchHoldingAnalysis, fetchLatestMarket, sendWechatAlert, sendWechatTestAlert } from './lib/api';
 import { formatChinaDateTime, formatSignedPercent } from './lib/marketFormat';
 import { actionLabel, analyzeHolding, classifyMarketTrend } from './lib/stockRules';
 import { parseHoldingsFromOcrText, recognizeHoldingsImage } from './lib/ocr';
@@ -17,6 +17,8 @@ const SAMPLE_OCR_TEXT = `光迅科技 20,497.00 -830.75 -3.820% 100 100 213.120 
 名臣健康 2,000.00 -218.49 -9.580% 100 100 22.120 20.000`;
 
 const SYNC_RECORDS_KEY = 'a-share-watchtower:pnl-records';
+const WECHAT_WEBHOOK_KEY = 'a-share-watchtower:wechat-webhook';
+const WECHAT_SENT_ALERTS_KEY = 'a-share-watchtower:wechat-sent-alerts';
 
 interface SyncRecord {
   id: string;
@@ -33,6 +35,10 @@ export default function App() {
   const [parsed, setParsed] = useState<ParsedHolding[]>([]);
   const [syncRecords, setSyncRecords] = useState<SyncRecord[]>(() => loadSyncRecords());
   const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const [reminderPanelOpen, setReminderPanelOpen] = useState(false);
+  const [wechatWebhookUrl, setWechatWebhookUrl] = useState(() => loadWechatWebhook());
+  const [wechatStatus, setWechatStatus] = useState(() => loadWechatWebhook() ? '微信提醒已保存，可发送测试确认。' : '微信提醒未配置。');
+  const [wechatTesting, setWechatTesting] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('可上传同花顺持仓截图，识别后会自动替换中间持仓列表，并记录本次盈亏结果。');
   const [market, setMarket] = useState<MarketSnapshot>(demoMarket);
   const [remoteAnalyses, setRemoteAnalyses] = useState<HoldingAnalysis[] | null>(null);
@@ -74,6 +80,45 @@ export default function App() {
     () => screenshotSynced ? localAnalyses : mergeAnalyses(remoteAnalyses, localAnalyses),
     [remoteAnalyses, localAnalyses, screenshotSynced]
   );
+  const generatedAlerts = useMemo(() => analyses.filter((item) => item.action !== 'hold').map((item) => ({
+    id: `analysis-${item.symbol}`,
+    symbol: item.symbol,
+    level: item.level,
+    action: item.action,
+    reason: item.suggestion,
+    createdAt: new Date().toISOString(),
+    deliveredChannels: ['页面']
+  })), [analyses]);
+
+  useEffect(() => {
+    const webhookUrl = wechatWebhookUrl.trim();
+    if (!webhookUrl || generatedAlerts.length === 0) return;
+
+    let cancelled = false;
+    const sentKeys = loadWechatSentAlertKeys();
+    async function deliverAlerts() {
+      for (const alert of generatedAlerts) {
+        const alertKey = `${new Date().toISOString().slice(0, 10)}:${alert.symbol}:${alert.action}:${alert.level}`;
+        if (sentKeys.has(alertKey)) continue;
+        const result = await sendWechatAlert(
+          webhookUrl,
+          `A股${actionLabel(alert.action)}：${alert.symbol}`,
+          `${alert.reason}\n\n来源：A股实时监控驾驶舱`
+        );
+        if (cancelled) return;
+        if (result?.delivered) {
+          sentKeys.add(alertKey);
+          saveWechatSentAlertKeys(sentKeys);
+          setWechatStatus(`微信提醒已推送：${alert.symbol}`);
+        }
+      }
+    }
+
+    void deliverAlerts();
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedAlerts, wechatWebhookUrl]);
 
   function addParsedHoldings() {
     const next = parseHoldingsFromOcrText(ocrText);
@@ -117,6 +162,35 @@ export default function App() {
     setNotificationEnabled(permission === 'granted');
   }
 
+  function saveWechatWebhook() {
+    const nextUrl = wechatWebhookUrl.trim();
+    saveWechatWebhookUrl(nextUrl);
+    setWechatWebhookUrl(nextUrl);
+    setWechatStatus(nextUrl ? '微信提醒地址已保存。' : '微信提醒已清空。');
+  }
+
+  async function testWechatWebhook() {
+    const nextUrl = wechatWebhookUrl.trim();
+    if (!nextUrl) {
+      setWechatStatus('请先填写 Server 酱或 PushPlus webhook。');
+      return;
+    }
+
+    saveWechatWebhookUrl(nextUrl);
+    setWechatWebhookUrl(nextUrl);
+    setWechatTesting(true);
+    setWechatStatus('正在发送微信测试提醒...');
+    const result = await sendWechatTestAlert(nextUrl);
+    setWechatTesting(false);
+    if (result?.delivered) {
+      setWechatStatus('微信测试消息已发送，请在微信里确认。');
+    } else if (result?.configured === false) {
+      setWechatStatus('后端没有拿到 webhook，请重新保存后再试。');
+    } else {
+      setWechatStatus('微信测试发送失败，请检查 webhook 地址或推送服务状态。');
+    }
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -124,10 +198,43 @@ export default function App() {
           <p className="eyebrow">Netlify + Supabase + Render MVP</p>
           <h1>A股实时监控驾驶舱</h1>
         </div>
-        <button className="iconButton" type="button" onClick={requestNotificationPermission} title="开启浏览器提醒">
-          <Bell size={18} />
-          {notificationEnabled ? '提醒已开启' : '开启提醒'}
-        </button>
+        <div className="reminderMenu">
+          <button
+            className="iconButton"
+            type="button"
+            onClick={() => setReminderPanelOpen((open) => !open)}
+            title="开启提醒设置"
+          >
+            <Bell size={18} />
+            {notificationEnabled || Boolean(wechatWebhookUrl) ? '提醒已配置' : '开启提醒'}
+          </button>
+          {reminderPanelOpen ? (
+            <section className="reminderPanel" aria-label="提醒设置">
+              <div>
+                <strong>提醒设置</strong>
+                <span>浏览器通知 + 微信 webhook</span>
+              </div>
+              <button className="secondaryButton" type="button" onClick={requestNotificationPermission}>
+                {notificationEnabled ? '浏览器提醒已开启' : '开启浏览器提醒'}
+              </button>
+              <label>
+                <span>微信推送 webhook</span>
+                <input
+                  value={wechatWebhookUrl}
+                  onChange={(event) => setWechatWebhookUrl(event.target.value)}
+                  placeholder="Server 酱 SendKey URL 或 PushPlus webhook"
+                />
+              </label>
+              <div className="reminderActions">
+                <button className="secondaryButton" type="button" onClick={saveWechatWebhook}>保存微信提醒</button>
+                <button className="iconButton" type="button" onClick={() => void testWechatWebhook()} disabled={wechatTesting}>
+                  {wechatTesting ? '发送中...' : '发送微信测试'}
+                </button>
+              </div>
+              <p>{wechatStatus}</p>
+            </section>
+          ) : null}
+        </div>
       </header>
 
       <section className="grid">
@@ -203,15 +310,7 @@ export default function App() {
             <ShieldAlert size={20} />
             <h2>提醒队列</h2>
           </div>
-          {[...demoAlerts, ...analyses.filter((item) => item.action !== 'hold').map((item) => ({
-            id: `analysis-${item.symbol}`,
-            symbol: item.symbol,
-            level: item.level,
-            action: item.action,
-            reason: item.suggestion,
-            createdAt: new Date().toISOString(),
-            deliveredChannels: ['页面']
-          }))].map((alert) => (
+          {[...demoAlerts, ...generatedAlerts].map((alert) => (
             <div className={`alertItem ${alert.level}`} key={alert.id}>
               <span>{actionLabel(alert.action)} {alert.symbol}</span>
               <p>{alert.reason}</p>
@@ -310,6 +409,35 @@ function loadSyncRecords(): SyncRecord[] {
 function saveSyncRecords(records: SyncRecord[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(SYNC_RECORDS_KEY, JSON.stringify(records));
+}
+
+function loadWechatWebhook(): string {
+  if (typeof window === 'undefined') return '';
+  return window.localStorage.getItem(WECHAT_WEBHOOK_KEY) ?? '';
+}
+
+function saveWechatWebhookUrl(webhookUrl: string) {
+  if (typeof window === 'undefined') return;
+  if (webhookUrl) {
+    window.localStorage.setItem(WECHAT_WEBHOOK_KEY, webhookUrl);
+  } else {
+    window.localStorage.removeItem(WECHAT_WEBHOOK_KEY);
+  }
+}
+
+function loadWechatSentAlertKeys(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(WECHAT_SENT_ALERTS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveWechatSentAlertKeys(keys: Set<string>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(WECHAT_SENT_ALERTS_KEY, JSON.stringify([...keys].slice(-120)));
 }
 
 function trendLabel(trend: string): string {

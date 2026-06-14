@@ -78,3 +78,43 @@ export async function fetchHoldingAnalysis(): Promise<HoldingAnalysis[] | null> 
     return null;
   }
 }
+
+export async function sendWechatTestAlert(webhookUrl: string): Promise<{ delivered: boolean; configured: boolean } | null> {
+  try {
+    const response = await fetch(`${backendUrl}/alerts/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: webhookUrl })
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return {
+      delivered: Boolean(payload.wechat_delivered),
+      configured: Boolean(payload.configured)
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function sendWechatAlert(
+  webhookUrl: string,
+  title: string,
+  content: string
+): Promise<{ delivered: boolean; configured: boolean } | null> {
+  try {
+    const response = await fetch(`${backendUrl}/alerts/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: webhookUrl, title, content })
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return {
+      delivered: Boolean(payload.wechat_delivered),
+      configured: Boolean(payload.configured)
+    };
+  } catch {
+    return null;
+  }
+}

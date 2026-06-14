@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchHoldingAnalysis, fetchLatestMarket } from './api';
+import { fetchHoldingAnalysis, fetchLatestMarket, sendWechatAlert, sendWechatTestAlert } from './api';
 
 describe('api', () => {
   it('maps backend market payload into frontend shape', async () => {
@@ -52,5 +52,46 @@ describe('api', () => {
 
     expect(analyses?.[0].currentPrice).toBe(205.4);
     expect(analyses?.[0].growthPoints[0]).toBe('等待企稳');
+  });
+  it('sends a custom webhook URL when testing WeChat alerts', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ wechat_delivered: true, configured: true })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await sendWechatTestAlert('https://sctapi.ftqq.com/example.send');
+
+    expect(result).toEqual({ delivered: true, configured: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/alerts/test'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ webhook_url: 'https://sctapi.ftqq.com/example.send' })
+      })
+    );
+  });
+
+  it('sends generated alert content to WeChat', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ wechat_delivered: true, configured: true })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await sendWechatAlert('https://www.pushplus.plus/send/example', '止损提醒', '光迅科技跌破止损线');
+
+    expect(result).toEqual({ delivered: true, configured: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/alerts/send'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          webhook_url: 'https://www.pushplus.plus/send/example',
+          title: '止损提醒',
+          content: '光迅科技跌破止损线'
+        })
+      })
+    );
   });
 });

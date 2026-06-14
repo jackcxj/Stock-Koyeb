@@ -8,7 +8,7 @@ body {
   margin: 0;
 }
 
-button, textarea {
+button, input, textarea {
   font: inherit;
 }
 
@@ -50,6 +50,74 @@ h1 {
   gap: 8px;
   min-height: 38px;
   padding: 0 14px;
+}
+
+.iconButton:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.secondaryButton {
+  background: #fff;
+  border: 1px solid #b8c8d4;
+  border-radius: 6px;
+  color: #102a43;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.reminderMenu {
+  position: relative;
+}
+
+.reminderPanel {
+  background: #fff;
+  border: 1px solid #cbd8e1;
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgb(16 42 67 / 16%);
+  display: grid;
+  gap: 12px;
+  min-width: 340px;
+  padding: 14px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 10;
+}
+
+.reminderPanel strong,
+.reminderPanel label span {
+  color: #17202a;
+  display: block;
+  font-weight: 700;
+}
+
+.reminderPanel div > span,
+.reminderPanel p {
+  color: #607484;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.reminderPanel label {
+  display: grid;
+  gap: 6px;
+}
+
+.reminderPanel input {
+  border: 1px solid #cbd8e1;
+  border-radius: 6px;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.reminderActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .grid {
@@ -392,6 +460,16 @@ textarea {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .reminderMenu,
+  .reminderPanel {
+    width: 100%;
+  }
+
+  .reminderPanel {
+    min-width: 0;
+    position: static;
   }
 
   .positionMetrics {

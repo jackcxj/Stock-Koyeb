@@ -4,6 +4,7 @@ import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from .config import get_settings
 from .market import demo_holdings
@@ -23,6 +24,16 @@ app.add_middleware(
 
 settings = get_settings()
 runtime = PollRuntime(demo_mode=settings.demo_mode)
+
+
+class AlertTestRequest(BaseModel):
+    webhook_url: str | None = None
+
+
+class AlertSendRequest(BaseModel):
+    webhook_url: str
+    title: str
+    content: str
 
 
 @app.on_event("startup")
@@ -66,14 +77,21 @@ def analysis_holdings() -> dict[str, object]:
 
 
 @app.post("/alerts/test")
-async def alerts_test() -> dict[str, object]:
+async def alerts_test(payload: AlertTestRequest | None = None) -> dict[str, object]:
     settings = get_settings()
+    webhook_url = (payload.webhook_url if payload else None) or settings.wechat_webhook_url
     delivered = await send_wechat_webhook(
-        settings.wechat_webhook_url,
+        webhook_url,
         "\u0041\u80a1\u76d1\u63a7\u6d4b\u8bd5\u63d0\u9192",
         "\u8fd9\u662f\u4e00\u6761\u6d4b\u8bd5\u6d88\u606f\u3002",
     )
-    return {"ok": True, "wechat_delivered": delivered}
+    return {"ok": True, "wechat_delivered": delivered, "configured": bool(webhook_url)}
+
+
+@app.post("/alerts/send")
+async def alerts_send(payload: AlertSendRequest) -> dict[str, object]:
+    delivered = await send_wechat_webhook(payload.webhook_url, payload.title, payload.content)
+    return {"ok": True, "wechat_delivered": delivered, "configured": bool(payload.webhook_url)}
 
 
 async def refresh_on_startup() -> None:
