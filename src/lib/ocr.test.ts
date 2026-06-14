@@ -90,4 +90,30 @@ describe('parseHoldingsFromOcrText', () => {
       }
     ]);
   });
+
+  it('extracts the newer Tonghuashun account holding summary rows', () => {
+    const text = `
+光迅科技
+20,497.00 -830.75 -3.820% 100 100 213.120 204.970
+洁美科技
+7,528.00 -648.26 -7.820% 100 100 81.670 75.280
+中兴通讯 7,270.00 -356.14 -4.560% 200 200 38.085 36.350
+工业富联 7,013.00 82.85 1.330% 100 100 69.211 70.130
+许继电气 6,660.00 -1,345.83 -16.720% 300 300 26.657 22.200
+通富微电 5,722.00 -1,482.36 -20.480% 100 100 71.960 57.220
+汇绿生态 4,950.00 -1,159.98 -18.880% 100 100 61.020 49.500
+名臣健康 2,000.00 -218.49 -9.580% 100 100 22.120 20.000
+`;
+
+    expect(parseHoldingsFromOcrText(text)).toEqual([
+      expect.objectContaining({ symbol: 'SZ002281', name: '光迅科技', marketValue: 20497, pnlAmount: -830.75, pnlPercent: -3.82, quantity: 100, availableQuantity: 100, costPrice: 213.12, currentPrice: 204.97 }),
+      expect.objectContaining({ symbol: 'SZ002859', name: '洁美科技', marketValue: 7528, pnlAmount: -648.26, pnlPercent: -7.82, quantity: 100, availableQuantity: 100, costPrice: 81.67, currentPrice: 75.28 }),
+      expect.objectContaining({ symbol: 'SZ000063', name: '中兴通讯', marketValue: 7270, pnlAmount: -356.14, pnlPercent: -4.56, quantity: 200, availableQuantity: 200, costPrice: 38.085, currentPrice: 36.35 }),
+      expect.objectContaining({ symbol: 'SH601138', name: '工业富联', marketValue: 7013, pnlAmount: 82.85, pnlPercent: 1.33, quantity: 100, availableQuantity: 100, costPrice: 69.211, currentPrice: 70.13 }),
+      expect.objectContaining({ symbol: 'SZ000400', name: '许继电气', marketValue: 6660, pnlAmount: -1345.83, pnlPercent: -16.72, quantity: 300, availableQuantity: 300, costPrice: 26.657, currentPrice: 22.2 }),
+      expect.objectContaining({ symbol: 'SZ002156', name: '通富微电', marketValue: 5722, pnlAmount: -1482.36, pnlPercent: -20.48, quantity: 100, availableQuantity: 100, costPrice: 71.96, currentPrice: 57.22 }),
+      expect.objectContaining({ symbol: 'SZ001267', name: '汇绿生态', marketValue: 4950, pnlAmount: -1159.98, pnlPercent: -18.88, quantity: 100, availableQuantity: 100, costPrice: 61.02, currentPrice: 49.5 }),
+      expect.objectContaining({ symbol: 'SZ002919', name: '名臣健康', marketValue: 2000, pnlAmount: -218.49, pnlPercent: -9.58, quantity: 100, availableQuantity: 100, costPrice: 22.12, currentPrice: 20 })
+    ]);
+  });
 });

@@ -3,9 +3,7 @@ import type { Action, AlertLevel, Holding, HoldingAnalysis, MarketSnapshot, Stoc
 export function normalizeStockSymbol(input: string): string {
   const value = input.replace(/\s+/g, '').toUpperCase();
   const match = value.match(/(?:SH|SZ|BJ)?(\d{6})/);
-  if (!match) {
-    return value;
-  }
+  if (!match) return value;
 
   const code = match[1];
   if (value.startsWith('SH') || value.startsWith('SZ') || value.startsWith('BJ')) {
@@ -20,18 +18,17 @@ export function classifyMarketTrend(snapshot: Pick<MarketSnapshot, 'indexChangeP
   const total = Math.max(snapshot.risingCount + snapshot.fallingCount, 1);
   const risingRatio = snapshot.risingCount / total;
 
-  if (snapshot.indexChangePercent >= 0.8 && risingRatio >= 0.62) {
-    return 'bullish';
-  }
-  if (snapshot.indexChangePercent <= -0.8 && risingRatio <= 0.38) {
-    return 'bearish';
-  }
+  if (snapshot.indexChangePercent >= 0.8 && risingRatio >= 0.62) return 'bullish';
+  if (snapshot.indexChangePercent <= -0.8 && risingRatio <= 0.38) return 'bearish';
   return 'neutral';
 }
 
 export function analyzeHolding(holding: Holding, stock: StockSnapshot, market: MarketSnapshot): HoldingAnalysis {
   const trend = classifyMarketTrend(market);
-  const pnlPercent = ((stock.price - holding.costPrice) / Math.max(holding.costPrice, 0.01)) * 100;
+  const calculatedPnlPercent = ((stock.price - holding.costPrice) / Math.max(holding.costPrice, 0.01)) * 100;
+  const pnlPercent = Number.isFinite(holding.pnlPercent) ? Number(holding.pnlPercent) : calculatedPnlPercent;
+  const marketValue = Number.isFinite(holding.marketValue) ? Number(holding.marketValue) : stock.price * holding.quantity;
+  const pnlAmount = Number.isFinite(holding.pnlAmount) ? Number(holding.pnlAmount) : (stock.price - holding.costPrice) * holding.quantity;
   const risks: string[] = [];
   const growthPoints: string[] = [];
   let action: Action = 'hold';
@@ -85,6 +82,12 @@ export function analyzeHolding(holding: Holding, stock: StockSnapshot, market: M
     level,
     currentPrice: stock.price,
     pnlPercent,
+    quantity: holding.quantity,
+    availableQuantity: holding.availableQuantity,
+    marketValue,
+    pnlAmount,
+    costPrice: holding.costPrice,
+    stopLossPrice: holding.stopLossPrice,
     risks,
     growthPoints,
     suggestion: buildSuggestion(action)

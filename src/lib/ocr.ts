@@ -18,9 +18,7 @@ const KNOWN_SYMBOLS: Record<string, string> = {
 export function parseHoldingsFromOcrText(text: string): ParsedHolding[] {
   const normalized = normalizeOcrText(text);
   const tableRows = parseTonghuashunTable(normalized.replace(/\s+/g, ' '));
-  if (tableRows.length > 0) {
-    return tableRows;
-  }
+  if (tableRows.length > 0) return tableRows;
 
   return normalized
     .split(/\r?\n/)
@@ -39,26 +37,23 @@ export function parseHoldingsFromOcrText(text: string): ParsedHolding[] {
 
 export async function recognizeHoldingsImage(file: File): Promise<ParsedHolding[]> {
   const { createWorker } = await import('tesseract.js');
-  const image = await createPreprocessedImage(file);
   const worker = await createWorker('chi_sim+eng');
   try {
-    const processed = await worker.recognize(image);
-    let parsed = parseHoldingsFromOcrText(processed.data.text);
-    if (parsed.length === 0) {
-      const original = await worker.recognize(file);
-      parsed = parseHoldingsFromOcrText(original.data.text);
+    const images = await createPreprocessedImages(file);
+    for (const image of images) {
+      const result = await worker.recognize(image);
+      const parsed = parseHoldingsFromOcrText(result.data.text);
+      if (parsed.length > 0) return parsed;
     }
-    return parsed;
+    return [];
   } finally {
     await worker.terminate();
   }
 }
 
 function parseTonghuashunTable(text: string): ParsedHolding[] {
-  const names = Object.keys(KNOWN_SYMBOLS);
-  const hits = names
-    .map((name) => ({ name, index: text.indexOf(name) }))
-    .filter((hit) => hit.index >= 0)
+  const hits = Object.keys(KNOWN_SYMBOLS)
+    .flatMap((name) => findAllNameHits(text, name))
     .sort((a, b) => a.index - b.index);
 
   return hits
@@ -69,15 +64,25 @@ function parseTonghuashunTable(text: string): ParsedHolding[] {
     .filter((holding): holding is ParsedHolding => Boolean(holding));
 }
 
+function findAllNameHits(text: string, name: string): Array<{ name: string; index: number }> {
+  const hits: Array<{ name: string; index: number }> = [];
+  let from = 0;
+  while (from < text.length) {
+    const index = text.indexOf(name, from);
+    if (index < 0) break;
+    hits.push({ name, index });
+    from = index + name.length;
+  }
+  return hits;
+}
+
 function parseKnownNameSegment(name: string, segment: string): ParsedHolding | null {
   const values = segment
     .replace(name, ' ')
     .match(/[-+]?\d+(?:,\d{3})*(?:\.\d+)?%?/g)
     ?.map((raw) => raw.replace(/,/g, '')) ?? [];
 
-  if (values.length < 7) {
-    return null;
-  }
+  if (values.length < 7) return null;
 
   const marketValue = Number(values[0]);
   const pnlAmount = Number(values[1]);
@@ -109,6 +114,7 @@ function normalizeOcrText(text: string): string {
   return text
     .replace(/[−–—]/g, '-')
     .replace(/[，]/g, ',')
+    .replace(/\s+\/\s+/g, '/')
     .trim();
 }
 
@@ -116,29 +122,30 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-async function createPreprocessedImage(file: File): Promise<HTMLCanvasElement | File> {
-  if (typeof document === 'undefined') {
-    return file;
-  }
+async function createPreprocessedImages(file: File): Promise<Array<HTMLCanvasElement | File>> {
+  if (typeof document === 'undefined') return [file];
 
   const bitmap = await createImageBitmap(file);
   const source = document.createElement('canvas');
   source.width = bitmap.width;
   source.height = bitmap.height;
-  const sourceContext = source.getContext('2d');
-  if (!sourceContext) return file;
-  sourceContext.drawImage(bitmap, 0, 0);
+  source.getContext('2d')?.drawImage(bitmap, 0, 0);
 
-  const cropY = Math.floor(bitmap.height * 0.17);
-  const cropHeight = Math.floor(bitmap.height * 0.66);
+  return [createHoldingTableCrop(source, bitmap.width, bitmap.height), source, file];
+}
+
+function createHoldingTableCrop(source: HTMLCanvasElement, width: number, height: number): HTMLCanvasElement {
+  const cropY = Math.floor(height * 0.33);
+  const cropHeight = Math.floor(height * 0.56);
   const scale = 2;
   const target = document.createElement('canvas');
-  target.width = bitmap.width * scale;
+  target.width = width * scale;
   target.height = cropHeight * scale;
   const context = target.getContext('2d');
-  if (!context) return file;
+  if (!context) return source;
+
   context.imageSmoothingEnabled = false;
-  context.drawImage(source, 0, cropY, bitmap.width, cropHeight, 0, 0, target.width, target.height);
+  context.drawImage(source, 0, cropY, width, cropHeight, 0, 0, target.width, target.height);
 
   const imageData = context.getImageData(0, 0, target.width, target.height);
   const pixels = imageData.data;
@@ -146,10 +153,9 @@ async function createPreprocessedImage(file: File): Promise<HTMLCanvasElement | 
     const red = pixels[index];
     const green = pixels[index + 1];
     const blue = pixels[index + 2];
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
-    const looksLikeText = max > 88 && max - min > 18;
-    const value = looksLikeText ? 0 : 255;
+    const isColoredText = Math.max(red, green, blue) - Math.min(red, green, blue) > 22;
+    const isDarkText = red + green + blue < 500;
+    const value = isColoredText || isDarkText ? 0 : 255;
     pixels[index] = value;
     pixels[index + 1] = value;
     pixels[index + 2] = value;

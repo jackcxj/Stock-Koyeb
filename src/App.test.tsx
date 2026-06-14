@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 describe('App', () => {
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
@@ -46,5 +47,53 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByText(/后台实时更新/)).toBeInTheDocument());
     expect(await screen.findByText('盘中')).toBeInTheDocument();
+  });
+
+  it('writes confirmed screenshot holdings into the middle holding risk list', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => String(url).includes('/market/latest')
+        ? {
+          id: 'live-market',
+          index_name: '上证指数',
+          index_change_percent: 1.12,
+          market_status: '已收盘',
+          indices: [],
+          rising_count: 3923,
+          falling_count: 1515,
+          total_turnover: 3236299000000,
+          source_status: 'ok',
+          captured_at: '2026-06-12T15:30:39+08:00'
+        }
+        : {
+          items: [{
+            symbol: 'SZ002919',
+            name: '名臣健康',
+            action: 'hold',
+            level: 'info',
+            current_price: 19.76,
+            pnl_percent: -5.39,
+            quantity: 200,
+            available_quantity: 200,
+            market_value: 3952,
+            pnl_amount: -232.48,
+            cost_price: 20.885,
+            stop_loss_price: 18.67,
+            risks: ['旧后台数据'],
+            growth_points: ['旧后台数据'],
+            suggestion: '旧后台数据'
+          }]
+        }
+    })));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '识别文本' }));
+    fireEvent.click(await screen.findAllByRole('button', { name: '确认写入' }).then((buttons) => buttons[7]));
+
+    expect(await screen.findByText(/名臣健康 已写入持仓风险列表/)).toBeInTheDocument();
+    expect(screen.getByText('成本/现价')).toBeInTheDocument();
+    expect(screen.getByText('22.120/20.000')).toBeInTheDocument();
+    expect(screen.getByText('-218.49 元')).toBeInTheDocument();
+    expect(screen.getByText('2,000 元')).toBeInTheDocument();
   });
 });

@@ -3,15 +3,23 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Holding, HoldingAnalysis, MarketSnapshot, ParsedHolding } from './types';
 import { demoAlerts, demoHoldings, demoMarket, demoStocks } from './lib/demoData';
 import { fetchHoldingAnalysis, fetchLatestMarket } from './lib/api';
-import { formatChinaDateTime, formatSignedCount, formatSignedPercent } from './lib/marketFormat';
+import { formatChinaDateTime, formatSignedPercent } from './lib/marketFormat';
 import { actionLabel, analyzeHolding, classifyMarketTrend } from './lib/stockRules';
 import { parseHoldingsFromOcrText, recognizeHoldingsImage } from './lib/ocr';
 
+const SAMPLE_OCR_TEXT = `光迅科技 20,497.00 -830.75 -3.820% 100 100 213.120 204.970
+洁美科技 7,528.00 -648.26 -7.820% 100 100 81.670 75.280
+中兴通讯 7,270.00 -356.14 -4.560% 200 200 38.085 36.350
+工业富联 7,013.00 82.85 1.330% 100 100 69.211 70.130
+许继电气 6,660.00 -1,345.83 -16.720% 300 300 26.657 22.200
+通富微电 5,722.00 -1,482.36 -20.480% 100 100 71.960 57.220
+汇绿生态 4,950.00 -1,159.98 -18.880% 100 100 61.020 49.500
+名臣健康 2,000.00 -218.49 -9.580% 100 100 22.120 20.000`;
+
 export default function App() {
   const [holdings, setHoldings] = useState<Holding[]>(demoHoldings);
-  const [ocrText, setOcrText] = useState(
-    '光迅科技 20,540.00 -787.77 -3.620% 100 100 213.120 205.400\n洁美科技 7,801.00 -375.40 -4.480% 100 100 81.670 78.010'
-  );
+  const [localOverrideSymbols, setLocalOverrideSymbols] = useState<Set<string>>(new Set());
+  const [ocrText, setOcrText] = useState(SAMPLE_OCR_TEXT);
   const [parsed, setParsed] = useState<ParsedHolding[]>([]);
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [ocrStatus, setOcrStatus] = useState('可上传同花顺持仓截图，系统会按市值、盈亏、持仓/可用、成本/现价解析，结果需人工确认。');
@@ -35,9 +43,7 @@ export default function App() {
       } else {
         setDataSourceLabel('后台连接失败，显示本地演示数据');
       }
-      if (nextAnalyses) {
-        setRemoteAnalyses(nextAnalyses);
-      }
+      if (nextAnalyses) setRemoteAnalyses(nextAnalyses);
     }
 
     void refreshFromBackend();
@@ -49,15 +55,19 @@ export default function App() {
   }, []);
 
   const marketTrend = classifyMarketTrend(market);
+  const localAnalyses = useMemo(
+    () => holdings.map((holding) => analyzeHolding(holding, demoStocks[holding.symbol] ?? stockFromHolding(holding, market), market)),
+    [holdings, market]
+  );
   const analyses = useMemo(
-    () => remoteAnalyses ?? holdings.map((holding) => analyzeHolding(holding, demoStocks[holding.symbol] ?? stockFromHolding(holding, market), market)),
-    [holdings, market, remoteAnalyses]
+    () => mergeAnalyses(remoteAnalyses, localAnalyses, localOverrideSymbols),
+    [remoteAnalyses, localAnalyses, localOverrideSymbols]
   );
 
   function addParsedHoldings() {
     const next = parseHoldingsFromOcrText(ocrText);
     setParsed(next);
-    setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认。` : '没有识别到持仓，请检查文本或上传更清晰截图。');
+    setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认写入。` : '没有识别到持仓，请检查文本或上传更清晰截图。');
   }
 
   async function handleImageUpload(file: File | undefined) {
@@ -66,31 +76,20 @@ export default function App() {
     try {
       const next = await recognizeHoldingsImage(file);
       setParsed(next);
-      setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认。` : '未识别到可确认持仓，请换一张更清晰的截图。');
+      setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认写入。` : '未识别到可确认持仓，建议裁剪到持仓股表格区域后重试。');
     } catch (error) {
       setOcrStatus(error instanceof Error ? `OCR 失败：${error.message}` : 'OCR 失败，请稍后重试。');
     }
   }
 
   function confirmParsedHolding(item: ParsedHolding) {
+    const nextHolding = holdingFromParsed(item);
     setHoldings((current) => [
       ...current.filter((holding) => holding.symbol !== item.symbol),
-      {
-        id: `h-${item.symbol}`,
-        symbol: item.symbol,
-        name: item.name,
-        quantity: item.quantity,
-        availableQuantity: item.availableQuantity,
-        marketValue: item.marketValue,
-        pnlAmount: item.pnlAmount,
-        pnlPercent: item.pnlPercent,
-        currentPrice: item.currentPrice,
-        costPrice: item.costPrice,
-        stopLossPrice: item.stopLossPrice,
-        watchReason: '同花顺截图导入，已人工确认',
-        isActive: true
-      }
+      nextHolding
     ]);
+    setLocalOverrideSymbols((current) => new Set([...current, item.symbol]));
+    setOcrStatus(`${item.name} 已写入持仓风险列表，市值、盈亏、现价已按截图更新。`);
   }
 
   async function requestNotificationPermission() {
@@ -103,7 +102,7 @@ export default function App() {
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Netlify + Supabase + Koyeb MVP</p>
+          <p className="eyebrow">Netlify + Supabase + Render MVP</p>
           <h1>A股实时监控驾驶舱</h1>
         </div>
         <button className="iconButton" type="button" onClick={requestNotificationPermission} title="开启浏览器提醒">
@@ -127,7 +126,7 @@ export default function App() {
             <div><dt>采集时间</dt><dd>{formatChinaDateTime(market.capturedAt)}</dd></div>
             <div><dt>上涨家数</dt><dd>{market.risingCount}</dd></div>
             <div><dt>下跌家数</dt><dd>{market.fallingCount}</dd></div>
-            <div><dt>成交额</dt><dd>{(market.totalTurnover / 100000000).toFixed(0)} 亿</dd></div>
+            <div><dt>成交额</dt><dd>{formatYi(market.totalTurnover)}</dd></div>
             <div><dt>资金净流入</dt><dd>{formatYi(market.netInflow)}</dd></div>
           </dl>
           <div className="compareStrip">
@@ -157,29 +156,26 @@ export default function App() {
             <h2>持仓风险</h2>
           </div>
           <div className="holdingList">
-            {analyses.map((analysis) => {
-              const holding = holdingFromAnalysis(analysis) ?? holdings.find((item) => item.symbol === analysis.symbol);
-              return (
-                <div className={`holdingRow ${analysis.level}`} key={analysis.symbol}>
-                  <div>
-                    <strong>{analysis.name}</strong>
-                    <span>{analysis.symbol} · {actionLabel(analysis.action)}</span>
-                  </div>
-                  <div className="numberBlock">
-                    <strong>{analysis.currentPrice.toFixed(3)}</strong>
-                    <span>{analysis.pnlPercent.toFixed(2)}%</span>
-                  </div>
-                  <dl className="positionMetrics">
-                    <div><dt>市值</dt><dd>{formatMoney(holding?.marketValue)}</dd></div>
-                    <div><dt>盈亏</dt><dd>{formatMoney(holding?.pnlAmount)}</dd></div>
-                    <div><dt>持仓/可用</dt><dd>{formatShares(holding)}</dd></div>
-                    <div><dt>成本/现价</dt><dd>{formatCostPrice(holding)}</dd></div>
-                  </dl>
-                  <p>{analysis.risks[0]}</p>
-                  <p>{analysis.growthPoints[0]}</p>
+            {analyses.map((analysis) => (
+              <div className={`holdingRow ${analysis.level}`} key={analysis.symbol}>
+                <div>
+                  <strong>{analysis.name}</strong>
+                  <span>{analysis.symbol} · {actionLabel(analysis.action)}</span>
                 </div>
-              );
-            })}
+                <div className="numberBlock">
+                  <strong>{actionLabel(analysis.action)}</strong>
+                  <span>{formatSignedPercent(analysis.pnlPercent)}</span>
+                </div>
+                <dl className="positionMetrics">
+                  <div><dt>市值</dt><dd>{formatMoneyWithUnit(analysis.marketValue)}</dd></div>
+                  <div><dt>盈亏</dt><dd className={signedClass(analysis.pnlAmount)}>{formatMoneyWithUnit(analysis.pnlAmount)}</dd></div>
+                  <div><dt>持仓/可用</dt><dd>{formatShares(analysis)}</dd></div>
+                  <div><dt>成本/现价</dt><dd>{formatCostPrice(analysis)}</dd></div>
+                </dl>
+                <p>{analysis.risks[0]}</p>
+                <p>{analysis.growthPoints[0]}</p>
+              </div>
+            ))}
           </div>
         </article>
 
@@ -226,7 +222,7 @@ export default function App() {
           <div className="parsedList">
             {parsed.map((item) => (
               <div className="parsedItem" key={item.symbol}>
-                <span>{item.name} {item.symbol} · 市值 {formatMoney(item.marketValue)} · 盈亏 {formatMoney(item.pnlAmount)} · {item.quantity} 股 · 成本/现价 {item.costPrice}/{item.currentPrice}</span>
+                <span>{item.name} {item.symbol} · 市值 {formatMoneyWithUnit(item.marketValue)} · 盈亏 {formatMoneyWithUnit(item.pnlAmount)} · {item.quantity} 股 · 成本/现价 {formatFixed(item.costPrice)}/{formatFixed(item.currentPrice)}</span>
                 <button type="button" onClick={() => confirmParsedHolding(item)}>确认写入</button>
               </div>
             ))}
@@ -237,14 +233,45 @@ export default function App() {
   );
 }
 
+function mergeAnalyses(remote: HoldingAnalysis[] | null, local: HoldingAnalysis[], overrideSymbols: Set<string>): HoldingAnalysis[] {
+  if (!remote) return local;
+  const localBySymbol = new Map(local.map((item) => [item.symbol, item]));
+  const merged = remote.map((item) => overrideSymbols.has(item.symbol) ? localBySymbol.get(item.symbol) ?? item : item);
+  for (const symbol of overrideSymbols) {
+    if (!merged.some((item) => item.symbol === symbol)) {
+      const localItem = localBySymbol.get(symbol);
+      if (localItem) merged.push(localItem);
+    }
+  }
+  return merged;
+}
+
+function holdingFromParsed(item: ParsedHolding): Holding {
+  return {
+    id: `h-${item.symbol}`,
+    symbol: item.symbol,
+    name: item.name,
+    quantity: item.quantity,
+    availableQuantity: item.availableQuantity,
+    marketValue: item.marketValue,
+    pnlAmount: item.pnlAmount,
+    pnlPercent: item.pnlPercent,
+    currentPrice: item.currentPrice,
+    costPrice: item.costPrice,
+    stopLossPrice: item.stopLossPrice,
+    watchReason: '同花顺截图导入，已人工确认',
+    isActive: true
+  };
+}
+
 function trendLabel(trend: string): string {
   if (trend === 'bullish') return '偏强';
   if (trend === 'bearish') return '偏弱';
   return '震荡';
 }
 
-function formatMoney(value?: number): string {
-  return Number.isFinite(value) ? Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '--';
+function formatMoneyWithUnit(value?: number): string {
+  return Number.isFinite(value) ? `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} 元` : '--';
 }
 
 function formatYi(value?: number): string {
@@ -256,33 +283,24 @@ function formatSignedNumber(value?: number): string {
   return `${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(2)}`;
 }
 
-function formatShares(holding?: Holding): string {
-  if (!holding) return '--';
-  return `${holding.quantity}/${holding.availableQuantity ?? holding.quantity}`;
+function formatShares(analysis: HoldingAnalysis): string {
+  const quantity = Number.isFinite(analysis.quantity) ? Number(analysis.quantity) : 0;
+  const available = Number.isFinite(analysis.availableQuantity) ? Number(analysis.availableQuantity) : quantity;
+  return quantity > 0 ? `${quantity}/${available}` : '--';
 }
 
-function formatCostPrice(holding?: Holding): string {
-  if (!holding) return '--';
-  return `${holding.costPrice.toFixed(3)}/${(holding.currentPrice ?? holding.costPrice).toFixed(3)}`;
+function formatCostPrice(analysis: HoldingAnalysis): string {
+  if (!Number.isFinite(analysis.costPrice) || !Number.isFinite(analysis.currentPrice)) return '--';
+  return `${formatFixed(analysis.costPrice)}/${formatFixed(analysis.currentPrice)}`;
 }
 
-function holdingFromAnalysis(analysis: HoldingAnalysis): Holding | undefined {
-  if (!Number.isFinite(analysis.quantity) || !Number.isFinite(analysis.costPrice)) return undefined;
-  return {
-    id: `remote-${analysis.symbol}`,
-    symbol: analysis.symbol,
-    name: analysis.name,
-    quantity: Number(analysis.quantity),
-    availableQuantity: Number.isFinite(analysis.availableQuantity) ? Number(analysis.availableQuantity) : Number(analysis.quantity),
-    marketValue: analysis.marketValue,
-    pnlAmount: analysis.pnlAmount,
-    pnlPercent: analysis.pnlPercent,
-    currentPrice: analysis.currentPrice,
-    costPrice: Number(analysis.costPrice),
-    stopLossPrice: Number.isFinite(analysis.stopLossPrice) ? Number(analysis.stopLossPrice) : analysis.currentPrice,
-    watchReason: '后台同步持仓',
-    isActive: true
-  };
+function formatFixed(value?: number): string {
+  return Number.isFinite(value) ? Number(value).toFixed(3) : '--';
+}
+
+function signedClass(value?: number): string {
+  if (!Number.isFinite(value)) return '';
+  return Number(value) >= 0 ? 'positive' : 'negative';
 }
 
 function stockFromHolding(holding: Holding, market: MarketSnapshot) {
