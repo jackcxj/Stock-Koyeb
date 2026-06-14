@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 describe('App', () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.unstubAllGlobals();
   });
 
@@ -49,7 +50,7 @@ describe('App', () => {
     expect(await screen.findByText('盘中')).toBeInTheDocument();
   });
 
-  it('writes confirmed screenshot holdings into the middle holding risk list', async () => {
+  it('automatically syncs screenshot holdings, removes absent stocks, and records pnl', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => ({
       ok: true,
       json: async () => String(url).includes('/market/latest')
@@ -66,34 +67,45 @@ describe('App', () => {
           captured_at: '2026-06-12T15:30:39+08:00'
         }
         : {
-          items: [{
-            symbol: 'SZ002919',
-            name: '名臣健康',
-            action: 'hold',
-            level: 'info',
-            current_price: 19.76,
-            pnl_percent: -5.39,
-            quantity: 200,
-            available_quantity: 200,
-            market_value: 3952,
-            pnl_amount: -232.48,
-            cost_price: 20.885,
-            stop_loss_price: 18.67,
-            risks: ['旧后台数据'],
-            growth_points: ['旧后台数据'],
-            suggestion: '旧后台数据'
-          }]
+          items: [
+            {
+              symbol: 'SH600900',
+              name: '长江电力',
+              action: 'hold',
+              level: 'info',
+              current_price: 28.28,
+              pnl_percent: 1.29,
+              quantity: 100,
+              available_quantity: 100,
+              market_value: 2828,
+              pnl_amount: 36,
+              cost_price: 27.92,
+              stop_loss_price: 26.36,
+              risks: ['后台旧股票'],
+              growth_points: ['后台旧股票'],
+              suggestion: '后台旧股票'
+            }
+          ]
         }
     })));
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '识别文本' }));
-    fireEvent.click(await screen.findAllByRole('button', { name: '确认写入' }).then((buttons) => buttons[7]));
+    await screen.findByText('长江电力');
+    fireEvent.click(screen.getByRole('button', { name: '识别并同步' }));
 
-    expect(await screen.findByText(/名臣健康 已写入持仓风险列表/)).toBeInTheDocument();
-    expect(screen.getByText('成本/现价')).toBeInTheDocument();
-    expect(screen.getByText('22.120/20.000')).toBeInTheDocument();
-    expect(screen.getByText('-218.49 元')).toBeInTheDocument();
-    expect(screen.getByText('2,000 元')).toBeInTheDocument();
+    expect(await screen.findByText(/已自动同步 8 只持仓/)).toBeInTheDocument();
+    expect(screen.queryByText('长江电力')).not.toBeInTheDocument();
+
+    const holdingsPanel = screen.getByText('持仓风险').closest('article');
+    expect(holdingsPanel).not.toBeNull();
+    expect(within(holdingsPanel as HTMLElement).getByText('名臣健康')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('22.120/20.000')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('-218.49 元')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('2,000 元')).toBeInTheDocument();
+
+    const history = screen.getByLabelText('盈亏记录');
+    expect(within(history).getByText(/8 只/)).toBeInTheDocument();
+    expect(within(history).getByText('-5,958.96 元')).toBeInTheDocument();
+    expect(within(history).getByText(/总市值 61,640 元/)).toBeInTheDocument();
   });
 });

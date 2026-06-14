@@ -16,13 +16,24 @@ const SAMPLE_OCR_TEXT = `光迅科技 20,497.00 -830.75 -3.820% 100 100 213.120 
 汇绿生态 4,950.00 -1,159.98 -18.880% 100 100 61.020 49.500
 名臣健康 2,000.00 -218.49 -9.580% 100 100 22.120 20.000`;
 
+const SYNC_RECORDS_KEY = 'a-share-watchtower:pnl-records';
+
+interface SyncRecord {
+  id: string;
+  createdAt: string;
+  count: number;
+  totalMarketValue: number;
+  totalPnlAmount: number;
+}
+
 export default function App() {
   const [holdings, setHoldings] = useState<Holding[]>(demoHoldings);
-  const [localOverrideSymbols, setLocalOverrideSymbols] = useState<Set<string>>(new Set());
+  const [screenshotSynced, setScreenshotSynced] = useState(false);
   const [ocrText, setOcrText] = useState(SAMPLE_OCR_TEXT);
   const [parsed, setParsed] = useState<ParsedHolding[]>([]);
+  const [syncRecords, setSyncRecords] = useState<SyncRecord[]>(() => loadSyncRecords());
   const [notificationEnabled, setNotificationEnabled] = useState(false);
-  const [ocrStatus, setOcrStatus] = useState('可上传同花顺持仓截图，系统会按市值、盈亏、持仓/可用、成本/现价解析，结果需人工确认。');
+  const [ocrStatus, setOcrStatus] = useState('可上传同花顺持仓截图，识别后会自动替换中间持仓列表，并记录本次盈亏结果。');
   const [market, setMarket] = useState<MarketSnapshot>(demoMarket);
   const [remoteAnalyses, setRemoteAnalyses] = useState<HoldingAnalysis[] | null>(null);
   const [dataSourceLabel, setDataSourceLabel] = useState('后台连接中');
@@ -60,14 +71,13 @@ export default function App() {
     [holdings, market]
   );
   const analyses = useMemo(
-    () => mergeAnalyses(remoteAnalyses, localAnalyses, localOverrideSymbols),
-    [remoteAnalyses, localAnalyses, localOverrideSymbols]
+    () => screenshotSynced ? localAnalyses : mergeAnalyses(remoteAnalyses, localAnalyses),
+    [remoteAnalyses, localAnalyses, screenshotSynced]
   );
 
   function addParsedHoldings() {
     const next = parseHoldingsFromOcrText(ocrText);
-    setParsed(next);
-    setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认写入。` : '没有识别到持仓，请检查文本或上传更清晰截图。');
+    applyParsedHoldings(next, '文本');
   }
 
   async function handleImageUpload(file: File | undefined) {
@@ -75,21 +85,30 @@ export default function App() {
     setOcrStatus(`正在识别 ${file.name} ...`);
     try {
       const next = await recognizeHoldingsImage(file);
-      setParsed(next);
-      setOcrStatus(next.length > 0 ? `识别到 ${next.length} 条持仓，请逐条确认写入。` : '未识别到可确认持仓，建议裁剪到持仓股表格区域后重试。');
+      applyParsedHoldings(next, '截图');
     } catch (error) {
       setOcrStatus(error instanceof Error ? `OCR 失败：${error.message}` : 'OCR 失败，请稍后重试。');
     }
   }
 
-  function confirmParsedHolding(item: ParsedHolding) {
-    const nextHolding = holdingFromParsed(item);
-    setHoldings((current) => [
-      ...current.filter((holding) => holding.symbol !== item.symbol),
-      nextHolding
-    ]);
-    setLocalOverrideSymbols((current) => new Set([...current, item.symbol]));
-    setOcrStatus(`${item.name} 已写入持仓风险列表，市值、盈亏、现价已按截图更新。`);
+  function applyParsedHoldings(items: ParsedHolding[], source: string) {
+    setParsed(items);
+    if (items.length === 0) {
+      setOcrStatus(`未从${source}识别到可同步持仓，建议裁剪到持仓股表格区域后重试。`);
+      return;
+    }
+
+    const nextHoldings = items.map(holdingFromParsed);
+    setHoldings(nextHoldings);
+    setScreenshotSynced(true);
+
+    const record = createSyncRecord(nextHoldings);
+    setSyncRecords((current) => {
+      const nextRecords = [record, ...current].slice(0, 12);
+      saveSyncRecords(nextRecords);
+      return nextRecords;
+    });
+    setOcrStatus(`已自动同步 ${items.length} 只持仓；截图外股票已从中间持仓列表移除。`);
   }
 
   async function requestNotificationPermission() {
@@ -217,33 +236,37 @@ export default function App() {
           <p className="ocrStatus">{ocrStatus}</p>
           <textarea value={ocrText} onChange={(event) => setOcrText(event.target.value)} aria-label="OCR text" />
           <div className="actions">
-            <button type="button" onClick={addParsedHoldings}>识别文本</button>
+            <button type="button" onClick={addParsedHoldings}>识别并同步</button>
           </div>
           <div className="parsedList">
             {parsed.map((item) => (
               <div className="parsedItem" key={item.symbol}>
                 <span>{item.name} {item.symbol} · 市值 {formatMoneyWithUnit(item.marketValue)} · 盈亏 {formatMoneyWithUnit(item.pnlAmount)} · {item.quantity} 股 · 成本/现价 {formatFixed(item.costPrice)}/{formatFixed(item.currentPrice)}</span>
-                <button type="button" onClick={() => confirmParsedHolding(item)}>确认写入</button>
               </div>
             ))}
           </div>
+          <section className="syncHistory" aria-label="盈亏记录">
+            <h3>盈亏记录</h3>
+            {syncRecords.length === 0 ? (
+              <p>暂无同步记录</p>
+            ) : syncRecords.map((record) => (
+              <div className="syncRecord" key={record.id}>
+                <span>{formatChinaDateTime(record.createdAt)} · {record.count} 只</span>
+                <strong className={signedClass(record.totalPnlAmount)}>{formatMoneyWithUnit(record.totalPnlAmount)}</strong>
+                <em>总市值 {formatMoneyWithUnit(record.totalMarketValue)}</em>
+              </div>
+            ))}
+          </section>
         </article>
       </section>
     </main>
   );
 }
 
-function mergeAnalyses(remote: HoldingAnalysis[] | null, local: HoldingAnalysis[], overrideSymbols: Set<string>): HoldingAnalysis[] {
+function mergeAnalyses(remote: HoldingAnalysis[] | null, local: HoldingAnalysis[]): HoldingAnalysis[] {
   if (!remote) return local;
   const localBySymbol = new Map(local.map((item) => [item.symbol, item]));
-  const merged = remote.map((item) => overrideSymbols.has(item.symbol) ? localBySymbol.get(item.symbol) ?? item : item);
-  for (const symbol of overrideSymbols) {
-    if (!merged.some((item) => item.symbol === symbol)) {
-      const localItem = localBySymbol.get(symbol);
-      if (localItem) merged.push(localItem);
-    }
-  }
-  return merged;
+  return remote.map((item) => localBySymbol.get(item.symbol) ?? item);
 }
 
 function holdingFromParsed(item: ParsedHolding): Holding {
@@ -259,9 +282,34 @@ function holdingFromParsed(item: ParsedHolding): Holding {
     currentPrice: item.currentPrice,
     costPrice: item.costPrice,
     stopLossPrice: item.stopLossPrice,
-    watchReason: '同花顺截图导入，已人工确认',
+    watchReason: '同花顺截图自动同步',
     isActive: true
   };
+}
+
+function createSyncRecord(holdings: Holding[]): SyncRecord {
+  return {
+    id: `sync-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    count: holdings.length,
+    totalMarketValue: holdings.reduce((sum, item) => sum + Number(item.marketValue ?? 0), 0),
+    totalPnlAmount: holdings.reduce((sum, item) => sum + Number(item.pnlAmount ?? 0), 0)
+  };
+}
+
+function loadSyncRecords(): SyncRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SYNC_RECORDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSyncRecords(records: SyncRecord[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(SYNC_RECORDS_KEY, JSON.stringify(records));
 }
 
 function trendLabel(trend: string): string {

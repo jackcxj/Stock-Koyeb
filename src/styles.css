@@ -350,6 +350,40 @@ textarea {
   padding: 10px;
 }
 
+.syncHistory {
+  border-top: 1px solid #e3ebf0;
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.syncHistory h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.syncHistory p {
+  color: #607484;
+  font-size: 13px;
+}
+
+.syncRecord {
+  background: #f8fafc;
+  border: 1px solid #e3ebf0;
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+}
+
+.syncRecord span,
+.syncRecord em {
+  color: #607484;
+  font-size: 12px;
+  font-style: normal;
+}
+
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: 1fr;
