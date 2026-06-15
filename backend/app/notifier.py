@@ -117,8 +117,9 @@ def _is_successful_response(webhook_url: str, response: httpx.Response) -> bool:
         return True
     code = payload.get("code")
     if _is_wxpusher(webhook_url) or _is_wxpusher_spt(webhook_url):
+        data_items = payload.get("data") or []
         return code == 1000 and payload.get("success") is True and all(
-            item.get("code") == 1000 for item in payload.get("data", [])
+            item.get("code") == 1000 for item in data_items
         )
     if _is_pushplus(webhook_url):
         return code == 200
@@ -142,7 +143,7 @@ def _build_send_result(webhook_url: str, response: httpx.Response) -> WechatSend
         message = str(provider_message)
 
     if _is_wxpusher(webhook_url) or _is_wxpusher_spt(webhook_url):
-        data_items = payload.get("data", [])
+        data_items = payload.get("data") or []
         failed_items = [item for item in data_items if item.get("code") != 1000]
         if failed_items:
             first_failure = failed_items[0]

@@ -80,6 +80,12 @@ class NotifierTests(unittest.TestCase):
                 httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 2000}]}),
             )
         )
+        self.assertFalse(
+            _is_successful_response(
+                "SPT_bad",
+                httpx.Response(200, json={"code": 1001, "success": False, "msg": "用户不存在", "data": None}),
+            )
+        )
         self.assertTrue(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 0})))
         self.assertFalse(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 40001})))
 
@@ -109,6 +115,16 @@ class NotifierTests(unittest.TestCase):
 
         self.assertTrue(submitted.delivered)
         self.assertIn("已创建发送任务", submitted.message)
+
+    def test_builds_wxpusher_top_level_failure_result(self):
+        failed = _build_send_result(
+            "SPT_bad",
+            httpx.Response(200, json={"code": 1001, "success": False, "msg": "用户不存在", "data": None}),
+        )
+
+        self.assertFalse(failed.delivered)
+        self.assertEqual(failed.provider_code, 1001)
+        self.assertEqual(failed.message, "用户不存在")
 
 
 if __name__ == "__main__":
