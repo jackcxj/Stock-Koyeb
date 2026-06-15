@@ -51,10 +51,11 @@ describe('App', () => {
   });
 
   it('automatically syncs screenshot holdings, removes absent stocks, and records pnl', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => ({
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => ({
       ok: true,
-      json: async () => String(url).includes('/market/latest')
-        ? {
+      json: async () => {
+        if (String(url).includes('/market/latest')) {
+          return {
           id: 'live-market',
           index_name: '上证指数',
           index_change_percent: 1.12,
@@ -65,8 +66,32 @@ describe('App', () => {
           total_turnover: 3236299000000,
           source_status: 'ok',
           captured_at: '2026-06-12T15:30:39+08:00'
+          };
         }
-        : {
+        if (init?.method === 'POST') {
+          return {
+            items: [
+              {
+                symbol: 'SZ002919',
+                name: '名臣健康',
+                action: 'reduce',
+                level: 'warning',
+                current_price: 19.5,
+                pnl_percent: -11.84,
+                quantity: 100,
+                available_quantity: 100,
+                market_value: 1950,
+                pnl_amount: -262,
+                cost_price: 22.12,
+                stop_loss_price: 18.9,
+                risks: ['实时回撤'],
+                growth_points: ['等待企稳'],
+                suggestion: '检查仓位'
+              }
+            ]
+          };
+        }
+        return {
           items: [
             {
               symbol: 'SH600900',
@@ -86,8 +111,10 @@ describe('App', () => {
               suggestion: '后台旧股票'
             }
           ]
-        }
-    })));
+        };
+      }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
 
     render(<App />);
     await screen.findByText('长江电力');
@@ -99,9 +126,13 @@ describe('App', () => {
     const holdingsPanel = screen.getByText('持仓风险').closest('article');
     expect(holdingsPanel).not.toBeNull();
     expect(within(holdingsPanel as HTMLElement).getByText('名臣健康')).toBeInTheDocument();
-    expect(within(holdingsPanel as HTMLElement).getByText('22.120/20.000')).toBeInTheDocument();
-    expect(within(holdingsPanel as HTMLElement).getByText('-218.49 元')).toBeInTheDocument();
-    expect(within(holdingsPanel as HTMLElement).getByText('2,000 元')).toBeInTheDocument();
+    expect(await within(holdingsPanel as HTMLElement).findByText('22.120/19.500')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('-262 元')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('1,950 元')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/analysis/holdings'),
+      expect.objectContaining({ method: 'POST' })
+    );
 
     const history = screen.getByLabelText('盈亏记录');
     expect(within(history).getByText(/8 只/)).toBeInTheDocument();
@@ -138,18 +169,18 @@ describe('App', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '开启提醒' }));
-    fireEvent.change(screen.getByPlaceholderText('wxpusher:AT_xxx:UID_xxx / Server 酱 SendKey / PushPlus token'), {
-      target: { value: 'https://sctapi.ftqq.com/example.send' }
+    fireEvent.change(screen.getByPlaceholderText('SPT_xxx / wxpusher:AT_xxx:UID_xxx / Server 酱 SendKey'), {
+      target: { value: 'SPT_example' }
     });
     fireEvent.click(screen.getByRole('button', { name: '发送微信测试' }));
 
     expect(await screen.findByText('微信测试消息已发送，请在微信里确认。')).toBeInTheDocument();
-    expect(window.localStorage.getItem('a-share-watchtower:wechat-webhook')).toBe('https://sctapi.ftqq.com/example.send');
+    expect(window.localStorage.getItem('a-share-watchtower:wechat-webhook')).toBe('SPT_example');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/alerts/test'),
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ webhook_url: 'https://sctapi.ftqq.com/example.send' })
+        body: JSON.stringify({ webhook_url: 'SPT_example' })
       })
     );
   });

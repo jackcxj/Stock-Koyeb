@@ -5,6 +5,7 @@ import httpx
 PUSHPLUS_API_URL = "https://www.pushplus.plus/send"
 SERVER_CHAN_API_PREFIX = "https://sctapi.ftqq.com/"
 WXPUSHER_API_URL = "https://wxpusher.zjiecode.com/api/send/message"
+WXPUSHER_SIMPLE_API_URL = "https://wxpusher.zjiecode.com/api/send/message/simple-push"
 
 
 async def send_wechat_webhook(webhook_url: str, title: str, content: str) -> bool:
@@ -19,6 +20,13 @@ async def send_wechat_webhook(webhook_url: str, title: str, content: str) -> boo
 
 
 def _build_payload(webhook_url: str, title: str, content: str) -> dict[str, str]:
+    if _is_wxpusher_spt(webhook_url):
+        return {
+            "spt": _extract_wxpusher_spt(webhook_url),
+            "content": f"{title}\n\n{content}",
+            "summary": title[:100],
+            "contentType": 1,
+        }
     if _is_wxpusher(webhook_url):
         app_token, uid = _extract_wxpusher_credentials(webhook_url)
         return {
@@ -36,6 +44,8 @@ def _build_payload(webhook_url: str, title: str, content: str) -> dict[str, str]
 
 def _normalize_webhook_url(value: str) -> str:
     webhook_url = value.strip()
+    if _is_wxpusher_spt(webhook_url):
+        return WXPUSHER_SIMPLE_API_URL
     if _is_wxpusher(webhook_url):
         return WXPUSHER_API_URL
     if _is_pushplus(webhook_url):
@@ -47,11 +57,16 @@ def _normalize_webhook_url(value: str) -> str:
 
 def _is_pushplus(value: str) -> bool:
     compact = value.strip().lower()
-    return "pushplus" in compact or (not compact.startswith(("http://", "https://", "sct", "wxpusher:")) and "/" not in compact)
+    return "pushplus" in compact or (not compact.startswith(("http://", "https://", "sct", "spt_", "wxpusher:", "wxpusher-spt:")) and "/" not in compact)
 
 
 def _is_wxpusher(value: str) -> bool:
     return value.strip().lower().startswith("wxpusher:")
+
+
+def _is_wxpusher_spt(value: str) -> bool:
+    compact = value.strip().lower()
+    return compact.startswith("spt_") or compact.startswith("wxpusher-spt:")
 
 
 def _extract_pushplus_token(value: str) -> str:
@@ -70,6 +85,13 @@ def _extract_wxpusher_credentials(value: str) -> tuple[str, str]:
     return parts[1].strip(), parts[2].strip()
 
 
+def _extract_wxpusher_spt(value: str) -> str:
+    compact = value.strip()
+    if compact.lower().startswith("wxpusher-spt:"):
+        return compact.split(":", 1)[1].strip()
+    return compact
+
+
 def _is_successful_response(webhook_url: str, response: httpx.Response) -> bool:
     if response.status_code >= 400:
         return False
@@ -78,7 +100,7 @@ def _is_successful_response(webhook_url: str, response: httpx.Response) -> bool:
     except ValueError:
         return True
     code = payload.get("code")
-    if _is_wxpusher(webhook_url):
+    if _is_wxpusher(webhook_url) or _is_wxpusher_spt(webhook_url):
         return code == 1000 and payload.get("success") is True and all(
             item.get("code") == 1000 for item in payload.get("data", [])
         )

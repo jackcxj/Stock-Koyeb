@@ -1,4 +1,4 @@
-import type { HoldingAnalysis, MarketSnapshot } from '../types';
+import type { Holding, HoldingAnalysis, MarketSnapshot } from '../types';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://stock-koyeb.onrender.com';
 
@@ -35,9 +35,28 @@ export async function fetchLatestMarket(): Promise<MarketSnapshot | null> {
   }
 }
 
-export async function fetchHoldingAnalysis(): Promise<HoldingAnalysis[] | null> {
+export async function fetchHoldingAnalysis(holdings?: Holding[]): Promise<HoldingAnalysis[] | null> {
   try {
-    const response = await fetch(`${backendUrl}/analysis/holdings`);
+    const response = await fetch(`${backendUrl}/analysis/holdings`, holdings
+      ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdings: holdings.map((holding) => ({
+            symbol: holding.symbol,
+            name: holding.name,
+            quantity: holding.quantity,
+            available_quantity: holding.availableQuantity,
+            market_value: holding.marketValue,
+            pnl_amount: holding.pnlAmount,
+            pnl_percent: holding.pnlPercent,
+            current_price: holding.currentPrice,
+            cost_price: holding.costPrice,
+            stop_loss_price: holding.stopLossPrice
+          }))
+        })
+      }
+      : undefined);
     if (!response.ok) return null;
     const payload = await response.json();
     const items = payload.items ?? payload;

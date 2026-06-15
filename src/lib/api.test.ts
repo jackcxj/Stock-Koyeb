@@ -53,6 +53,53 @@ describe('api', () => {
     expect(analyses?.[0].currentPrice).toBe(205.4);
     expect(analyses?.[0].growthPoints[0]).toBe('等待企稳');
   });
+
+  it('posts current holdings when requesting custom holding analysis', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        items: [{
+          symbol: 'SZ002919',
+          name: '名臣健康',
+          action: 'reduce',
+          level: 'warning',
+          current_price: 19.5,
+          pnl_percent: -6.6,
+          quantity: 100,
+          market_value: 1950,
+          pnl_amount: -158.5,
+          cost_price: 21.085,
+          stop_loss_price: 18.7,
+          risks: ['实时回撤'],
+          growth_points: ['等待企稳'],
+          suggestion: '降低风险'
+        }]
+      })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const analyses = await fetchHoldingAnalysis([{
+      id: 'h-SZ002919',
+      symbol: 'SZ002919',
+      name: '名臣健康',
+      quantity: 100,
+      availableQuantity: 100,
+      costPrice: 21.085,
+      currentPrice: 20,
+      stopLossPrice: 18.7,
+      watchReason: '截图同步',
+      isActive: true
+    }]);
+
+    expect(analyses?.[0].currentPrice).toBe(19.5);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/analysis/holdings'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"symbol":"SZ002919"')
+      })
+    );
+  });
   it('sends a custom webhook URL when testing WeChat alerts', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

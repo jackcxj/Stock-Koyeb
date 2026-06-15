@@ -48,7 +48,10 @@ export default function App() {
     let cancelled = false;
 
     async function refreshFromBackend() {
-      const [nextMarket, nextAnalyses] = await Promise.all([fetchLatestMarket(), fetchHoldingAnalysis()]);
+      const [nextMarket, nextAnalyses] = await Promise.all([
+        fetchLatestMarket(),
+        fetchHoldingAnalysis(screenshotSynced ? holdings : undefined)
+      ]);
       if (cancelled) return;
       if (nextMarket) {
         setMarket(nextMarket);
@@ -69,7 +72,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [holdings, screenshotSynced]);
 
   const marketTrend = classifyMarketTrend(market);
   const localAnalyses = useMemo(
@@ -77,7 +80,7 @@ export default function App() {
     [holdings, market]
   );
   const analyses = useMemo(
-    () => screenshotSynced ? localAnalyses : mergeAnalyses(remoteAnalyses, localAnalyses),
+    () => screenshotSynced ? mergeLocalAnalyses(remoteAnalyses, localAnalyses) : mergeAnalyses(remoteAnalyses, localAnalyses),
     [remoteAnalyses, localAnalyses, screenshotSynced]
   );
   const generatedAlerts = useMemo(() => analyses.filter((item) => item.action !== 'hold').map((item) => ({
@@ -172,7 +175,7 @@ export default function App() {
   async function testWechatWebhook() {
     const nextUrl = wechatWebhookUrl.trim();
     if (!nextUrl) {
-      setWechatStatus('请先填写 WxPusher、Server 酱或 PushPlus 的推送配置。');
+      setWechatStatus('请先填写 WxPusher SPT、Server 酱或 PushPlus 的推送配置。');
       return;
     }
 
@@ -222,7 +225,7 @@ export default function App() {
                 <input
                   value={wechatWebhookUrl}
                   onChange={(event) => setWechatWebhookUrl(event.target.value)}
-                  placeholder="wxpusher:AT_xxx:UID_xxx / Server 酱 SendKey / PushPlus token"
+                  placeholder="SPT_xxx / wxpusher:AT_xxx:UID_xxx / Server 酱 SendKey"
                 />
               </label>
               <div className="reminderActions">
@@ -366,6 +369,12 @@ function mergeAnalyses(remote: HoldingAnalysis[] | null, local: HoldingAnalysis[
   if (!remote) return local;
   const localBySymbol = new Map(local.map((item) => [item.symbol, item]));
   return remote.map((item) => localBySymbol.get(item.symbol) ?? item);
+}
+
+function mergeLocalAnalyses(remote: HoldingAnalysis[] | null, local: HoldingAnalysis[]): HoldingAnalysis[] {
+  if (!remote) return local;
+  const remoteBySymbol = new Map(remote.map((item) => [item.symbol, item]));
+  return local.map((item) => remoteBySymbol.get(item.symbol) ?? item);
 }
 
 function holdingFromParsed(item: ParsedHolding): Holding {

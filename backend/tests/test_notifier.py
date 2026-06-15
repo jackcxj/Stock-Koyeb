@@ -43,12 +43,34 @@ class NotifierTests(unittest.TestCase):
             },
         )
 
+    def test_accepts_wxpusher_simple_push_token(self):
+        self.assertEqual(
+            _normalize_webhook_url("SPT_abc"),
+            "https://wxpusher.zjiecode.com/api/send/message/simple-push",
+        )
+        self.assertEqual(
+            _build_payload("SPT_abc", "标题", "内容"),
+            {
+                "spt": "SPT_abc",
+                "content": "标题\n\n内容",
+                "summary": "标题",
+                "contentType": 1,
+            },
+        )
+        self.assertEqual(_build_payload("wxpusher-spt:SPT_abc", "标题", "内容")["spt"], "SPT_abc")
+
     def test_checks_provider_response_codes(self):
         self.assertTrue(_is_successful_response("pushplus:abc123", httpx.Response(200, json={"code": 200})))
         self.assertFalse(_is_successful_response("pushplus:bad", httpx.Response(200, json={"code": 903})))
         self.assertTrue(
             _is_successful_response(
                 "wxpusher:AT_abc:UID_xyz",
+                httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 1000}]}),
+            )
+        )
+        self.assertTrue(
+            _is_successful_response(
+                "SPT_abc",
                 httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 1000}]}),
             )
         )

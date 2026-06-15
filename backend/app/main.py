@@ -36,6 +36,23 @@ class AlertSendRequest(BaseModel):
     content: str
 
 
+class HoldingInput(BaseModel):
+    symbol: str
+    name: str
+    quantity: int
+    available_quantity: int | None = None
+    market_value: float | None = None
+    pnl_amount: float | None = None
+    pnl_percent: float | None = None
+    current_price: float | None = None
+    cost_price: float
+    stop_loss_price: float
+
+
+class HoldingAnalysisRequest(BaseModel):
+    holdings: list[HoldingInput]
+
+
 @app.on_event("startup")
 async def start_polling() -> None:
     current_settings = get_settings()
@@ -71,6 +88,23 @@ def analysis_holdings() -> dict[str, object]:
     items = []
     for holding in demo_holdings():
         stock = runtime.latest_stocks.get(holding["symbol"])
+        if stock:
+            items.append(enrich_holding_analysis(holding, stock, analyze_holding(holding, stock, runtime.latest_market)))
+    return {"items": items}
+
+
+@app.post("/analysis/holdings")
+async def analysis_custom_holdings(payload: HoldingAnalysisRequest) -> dict[str, object]:
+    holdings = [holding.model_dump(exclude_none=True) for holding in payload.holdings]
+    symbols = [str(holding["symbol"]) for holding in holdings]
+    if symbols:
+        next_stocks = await runtime.stock_fetcher(symbols)
+        if next_stocks:
+            runtime.latest_stocks = {**runtime.latest_stocks, **next_stocks}
+
+    items = []
+    for holding in holdings:
+        stock = runtime.latest_stocks.get(str(holding["symbol"]))
         if stock:
             items.append(enrich_holding_analysis(holding, stock, analyze_holding(holding, stock, runtime.latest_market)))
     return {"items": items}
