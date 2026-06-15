@@ -141,4 +141,27 @@ describe('api', () => {
       })
     );
   });
+
+  it('keeps WeChat provider response details for troubleshooting', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        wechat_delivered: false,
+        configured: true,
+        provider: 'WxPusher',
+        message: '用户不存在，请检查是否已经关注应用',
+        provider_code: 1001
+      })
+    })));
+
+    const result = await sendWechatTestAlert('SPT_bad');
+
+    expect(result).toEqual({
+      delivered: false,
+      configured: true,
+      provider: 'WxPusher',
+      message: '用户不存在，请检查是否已经关注应用',
+      providerCode: 1001
+    });
+  });
 });

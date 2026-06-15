@@ -2,7 +2,7 @@ import unittest
 
 import httpx
 
-from app.notifier import _build_payload, _is_successful_response, _normalize_webhook_url
+from app.notifier import _build_payload, _build_send_result, _is_successful_response, _normalize_webhook_url
 
 
 class NotifierTests(unittest.TestCase):
@@ -82,6 +82,33 @@ class NotifierTests(unittest.TestCase):
         )
         self.assertTrue(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 0})))
         self.assertFalse(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 40001})))
+
+    def test_builds_wxpusher_troubleshooting_result(self):
+        failed = _build_send_result(
+            "SPT_bad",
+            httpx.Response(
+                200,
+                json={
+                    "code": 1000,
+                    "success": True,
+                    "msg": "处理成功",
+                    "data": [{"code": 1001, "status": "用户不存在，请检查是否已经关注应用"}],
+                },
+            ),
+        )
+
+        self.assertFalse(failed.delivered)
+        self.assertEqual(failed.provider, "WxPusher")
+        self.assertEqual(failed.provider_code, 1001)
+        self.assertIn("用户不存在", failed.message)
+
+        submitted = _build_send_result(
+            "SPT_ok",
+            httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 1000}]}),
+        )
+
+        self.assertTrue(submitted.delivered)
+        self.assertIn("已创建发送任务", submitted.message)
 
 
 if __name__ == "__main__":

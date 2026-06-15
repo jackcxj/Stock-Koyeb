@@ -114,18 +114,32 @@ async def analysis_custom_holdings(payload: HoldingAnalysisRequest) -> dict[str,
 async def alerts_test(payload: AlertTestRequest | None = None) -> dict[str, object]:
     settings = get_settings()
     webhook_url = (payload.webhook_url if payload else None) or settings.wechat_webhook_url
-    delivered = await send_wechat_webhook(
+    result = await send_wechat_webhook(
         webhook_url,
         "\u0041\u80a1\u76d1\u63a7\u6d4b\u8bd5\u63d0\u9192",
         "\u8fd9\u662f\u4e00\u6761\u6d4b\u8bd5\u6d88\u606f\u3002",
     )
-    return {"ok": True, "wechat_delivered": delivered, "configured": bool(webhook_url)}
+    return {
+        "ok": True,
+        "wechat_delivered": result.delivered,
+        "configured": result.configured,
+        "provider": result.provider,
+        "message": result.message,
+        "provider_code": result.provider_code,
+    }
 
 
 @app.post("/alerts/send")
 async def alerts_send(payload: AlertSendRequest) -> dict[str, object]:
-    delivered = await send_wechat_webhook(payload.webhook_url, payload.title, payload.content)
-    return {"ok": True, "wechat_delivered": delivered, "configured": bool(payload.webhook_url)}
+    result = await send_wechat_webhook(payload.webhook_url, payload.title, payload.content)
+    return {
+        "ok": True,
+        "wechat_delivered": result.delivered,
+        "configured": result.configured,
+        "provider": result.provider,
+        "message": result.message,
+        "provider_code": result.provider_code,
+    }
 
 
 async def refresh_on_startup() -> None:

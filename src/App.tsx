@@ -1,5 +1,5 @@
 import { Bell, Cloud, FileImage, Gauge, ShieldAlert, TrendingUp, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Holding, HoldingAnalysis, MarketSnapshot, ParsedHolding } from './types';
 import { demoAlerts, demoHoldings, demoMarket, demoStocks } from './lib/demoData';
 import { fetchHoldingAnalysis, fetchLatestMarket, sendWechatAlert, sendWechatTestAlert } from './lib/api';
@@ -43,6 +43,19 @@ export default function App() {
   const [market, setMarket] = useState<MarketSnapshot>(demoMarket);
   const [remoteAnalyses, setRemoteAnalyses] = useState<HoldingAnalysis[] | null>(null);
   const [dataSourceLabel, setDataSourceLabel] = useState('后台连接中');
+  const [holdingSourceLabel, setHoldingSourceLabel] = useState('持仓行情等待同步');
+
+  const refreshHoldingAnalysis = useCallback(async (nextHoldings: Holding[]) => {
+    setHoldingSourceLabel('持仓行情同步中...');
+    const nextAnalyses = await fetchHoldingAnalysis(nextHoldings);
+    if (nextAnalyses?.length) {
+      setRemoteAnalyses(nextAnalyses);
+      setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(new Date().toISOString())}`);
+      return true;
+    }
+    setHoldingSourceLabel('持仓行情同步失败，暂用截图价格');
+    return false;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +76,10 @@ export default function App() {
       } else {
         setDataSourceLabel('后台连接失败，显示本地演示数据');
       }
-      if (nextAnalyses) setRemoteAnalyses(nextAnalyses);
+      if (nextAnalyses) {
+        setRemoteAnalyses(nextAnalyses);
+        setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(new Date().toISOString())}`);
+      }
     }
 
     void refreshFromBackend();
@@ -112,7 +128,7 @@ export default function App() {
         if (result?.delivered) {
           sentKeys.add(alertKey);
           saveWechatSentAlertKeys(sentKeys);
-          setWechatStatus(`微信提醒已推送：${alert.symbol}`);
+          setWechatStatus(result.message ? `微信提醒已提交：${alert.symbol} · ${result.message}` : `微信提醒已提交：${alert.symbol}`);
         }
       }
     }
@@ -149,6 +165,7 @@ export default function App() {
     const nextHoldings = items.map(holdingFromParsed);
     setHoldings(nextHoldings);
     setScreenshotSynced(true);
+    void refreshHoldingAnalysis(nextHoldings);
 
     const record = createSyncRecord(nextHoldings);
     setSyncRecords((current) => {
@@ -156,7 +173,7 @@ export default function App() {
       saveSyncRecords(nextRecords);
       return nextRecords;
     });
-    setOcrStatus(`已自动同步 ${items.length} 只持仓；截图外股票已从中间持仓列表移除。`);
+    setOcrStatus(`已自动同步 ${items.length} 只持仓；截图外股票已从中间持仓列表移除，并开始刷新实时行情。`);
   }
 
   async function requestNotificationPermission() {
@@ -186,11 +203,11 @@ export default function App() {
     const result = await sendWechatTestAlert(nextUrl);
     setWechatTesting(false);
     if (result?.delivered) {
-      setWechatStatus('微信测试消息已发送，请在微信里确认。');
+      setWechatStatus(result.message ? `微信测试已提交：${result.message}` : '微信测试已提交，请在微信里确认。');
     } else if (result?.configured === false) {
       setWechatStatus('后端没有拿到 webhook，请重新保存后再试。');
     } else {
-      setWechatStatus('微信测试发送失败，请检查 webhook 地址或推送服务状态。');
+      setWechatStatus(result?.message ? `微信测试失败：${result.message}` : '微信测试发送失败，请检查 webhook 地址或推送服务状态。');
     }
   }
 
@@ -306,6 +323,7 @@ export default function App() {
               </div>
             ))}
           </div>
+          <p className="statusLine"><Cloud size={16} /> 数据源：{holdingSourceLabel}</p>
         </article>
 
         <article className="panel alerts">

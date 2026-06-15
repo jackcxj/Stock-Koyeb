@@ -129,6 +129,7 @@ describe('App', () => {
     expect(await within(holdingsPanel as HTMLElement).findByText('22.120/19.500')).toBeInTheDocument();
     expect(within(holdingsPanel as HTMLElement).getByText('-262 元')).toBeInTheDocument();
     expect(within(holdingsPanel as HTMLElement).getByText('1,950 元')).toBeInTheDocument();
+    expect(await within(holdingsPanel as HTMLElement).findByText(/持仓行情实时更新/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/analysis/holdings'),
       expect.objectContaining({ method: 'POST' })
@@ -146,7 +147,12 @@ describe('App', () => {
       json: async () => {
         const requestUrl = String(url);
         if (requestUrl.includes('/alerts/test')) {
-          return { wechat_delivered: true, configured: true };
+          return {
+            wechat_delivered: true,
+            configured: true,
+            provider: 'WxPusher',
+            message: 'WxPusher 已创建发送任务；若微信没收到，请确认当前微信已关注该应用并完成通道激活。'
+          };
         }
         if (requestUrl.includes('/market/latest')) {
           return {
@@ -174,7 +180,7 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '发送微信测试' }));
 
-    expect(await screen.findByText('微信测试消息已发送，请在微信里确认。')).toBeInTheDocument();
+    expect(await screen.findByText(/微信测试已提交：WxPusher 已创建发送任务/)).toBeInTheDocument();
     expect(window.localStorage.getItem('a-share-watchtower:wechat-webhook')).toBe('SPT_example');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/alerts/test'),

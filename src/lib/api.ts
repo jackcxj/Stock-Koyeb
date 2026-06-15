@@ -2,6 +2,14 @@ import type { Holding, HoldingAnalysis, MarketSnapshot } from '../types';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://stock-koyeb.onrender.com';
 
+export interface WechatAlertResult {
+  delivered: boolean;
+  configured: boolean;
+  provider?: string;
+  message?: string;
+  providerCode?: number | string;
+}
+
 export async function fetchLatestMarket(): Promise<MarketSnapshot | null> {
   try {
     const response = await fetch(`${backendUrl}/market/latest`);
@@ -98,7 +106,7 @@ export async function fetchHoldingAnalysis(holdings?: Holding[]): Promise<Holdin
   }
 }
 
-export async function sendWechatTestAlert(webhookUrl: string): Promise<{ delivered: boolean; configured: boolean } | null> {
+export async function sendWechatTestAlert(webhookUrl: string): Promise<WechatAlertResult | null> {
   try {
     const response = await fetch(`${backendUrl}/alerts/test`, {
       method: 'POST',
@@ -109,7 +117,10 @@ export async function sendWechatTestAlert(webhookUrl: string): Promise<{ deliver
     const payload = await response.json();
     return {
       delivered: Boolean(payload.wechat_delivered),
-      configured: Boolean(payload.configured)
+      configured: Boolean(payload.configured),
+      provider: payload.provider,
+      message: payload.message,
+      providerCode: payload.provider_code
     };
   } catch {
     return null;
@@ -120,7 +131,7 @@ export async function sendWechatAlert(
   webhookUrl: string,
   title: string,
   content: string
-): Promise<{ delivered: boolean; configured: boolean } | null> {
+): Promise<WechatAlertResult | null> {
   try {
     const response = await fetch(`${backendUrl}/alerts/send`, {
       method: 'POST',
@@ -131,7 +142,10 @@ export async function sendWechatAlert(
     const payload = await response.json();
     return {
       delivered: Boolean(payload.wechat_delivered),
-      configured: Boolean(payload.configured)
+      configured: Boolean(payload.configured),
+      provider: payload.provider,
+      message: payload.message,
+      providerCode: payload.provider_code
     };
   } catch {
     return null;
