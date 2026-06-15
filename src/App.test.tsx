@@ -77,6 +77,7 @@ describe('App', () => {
                 action: 'reduce',
                 level: 'warning',
                 current_price: 19.5,
+                change_percent: 2.3,
                 pnl_percent: -11.84,
                 quantity: 100,
                 available_quantity: 100,
@@ -99,6 +100,7 @@ describe('App', () => {
               action: 'hold',
               level: 'info',
               current_price: 28.28,
+              change_percent: 1.4,
               pnl_percent: 1.29,
               quantity: 100,
               available_quantity: 100,
@@ -127,6 +129,7 @@ describe('App', () => {
     expect(holdingsPanel).not.toBeNull();
     expect(within(holdingsPanel as HTMLElement).getByText('名臣健康')).toBeInTheDocument();
     expect(await within(holdingsPanel as HTMLElement).findByText('22.120/19.500')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('+2.3%')).toBeInTheDocument();
     expect(within(holdingsPanel as HTMLElement).getByText('-262 元')).toBeInTheDocument();
     expect(within(holdingsPanel as HTMLElement).getByText('1,950 元')).toBeInTheDocument();
     expect(await within(holdingsPanel as HTMLElement).findByText(/持仓行情实时更新/)).toBeInTheDocument();
@@ -139,6 +142,81 @@ describe('App', () => {
     expect(within(history).getByText(/8 只/)).toBeInTheDocument();
     expect(within(history).getByText('-5,958.96 元')).toBeInTheDocument();
     expect(within(history).getByText(/总市值 61,640 元/)).toBeInTheDocument();
+  });
+
+  it('keeps synced screenshot holdings after a page refresh and refreshes their live prices', async () => {
+    window.localStorage.setItem('a-share-watchtower:holdings', JSON.stringify([{
+      id: 'h-SZ002281',
+      symbol: 'SZ002281',
+      name: '光迅科技',
+      quantity: 100,
+      availableQuantity: 100,
+      marketValue: 20497,
+      pnlAmount: -830.75,
+      pnlPercent: -3.82,
+      currentPrice: 204.97,
+      costPrice: 213.12,
+      stopLossPrice: 194.1,
+      watchReason: '同花顺截图自动同步',
+      isActive: true
+    }]));
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => ({
+      ok: true,
+      json: async () => {
+        if (String(url).includes('/market/latest')) {
+          return {
+            id: 'live-market',
+            index_name: '上证指数',
+            index_change_percent: 1.12,
+            market_status: '盘中',
+            indices: [],
+            rising_count: 3923,
+            falling_count: 1515,
+            total_turnover: 3236299000000,
+            source_status: 'ok',
+            captured_at: '2026-06-15T10:20:00+08:00'
+          };
+        }
+        if (init?.method === 'POST') {
+          return {
+            items: [{
+              symbol: 'SZ002281',
+              name: '光迅科技',
+              action: 'hold',
+              level: 'info',
+              current_price: 221.28,
+              change_percent: 4.1,
+              pnl_percent: 3.83,
+              quantity: 100,
+              available_quantity: 100,
+              market_value: 22128,
+              pnl_amount: 816,
+              cost_price: 213.12,
+              stop_loss_price: 194.1,
+              risks: ['未触发硬性止损风险'],
+              growth_points: ['现价高于成本'],
+              suggestion: '继续观察'
+            }]
+          };
+        }
+        return { items: [] };
+      }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const holdingsPanel = screen.getByText('持仓风险').closest('article');
+    expect(holdingsPanel).not.toBeNull();
+    expect(await within(holdingsPanel as HTMLElement).findByText('213.120/221.280')).toBeInTheDocument();
+    expect(within(holdingsPanel as HTMLElement).getByText('+4.1%')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/analysis/holdings'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"symbol":"SZ002281"')
+      })
+    );
   });
 
   it('connects the top reminder button to a WeChat webhook test', async () => {

@@ -74,6 +74,7 @@ export async function fetchHoldingAnalysis(holdings?: Holding[]): Promise<Holdin
       action: HoldingAnalysis['action'];
       level: HoldingAnalysis['level'];
       current_price: number;
+      change_percent?: number;
       pnl_percent: number;
       quantity?: number;
       available_quantity?: number;
@@ -90,6 +91,7 @@ export async function fetchHoldingAnalysis(holdings?: Holding[]): Promise<Holdin
       action: item.action,
       level: item.level,
       currentPrice: item.current_price,
+      changePercent: item.change_percent,
       pnlPercent: item.pnl_percent,
       quantity: item.quantity,
       availableQuantity: item.available_quantity,

@@ -161,6 +161,7 @@ def enrich_holding_analysis(holding: dict[str, object], stock: dict[str, object]
         "available_quantity": int(holding.get("available_quantity", quantity) or quantity),
         "market_value": market_value,
         "pnl_amount": pnl_amount,
+        "change_percent": float(stock.get("change_percent", analysis.get("change_percent", 0)) or 0),
         "cost_price": cost_price,
         "stop_loss_price": float(holding.get("stop_loss_price", 0) or 0),
     }

@@ -81,6 +81,7 @@ export function analyzeHolding(holding: Holding, stock: StockSnapshot, market: M
     action,
     level,
     currentPrice: stock.price,
+    changePercent: stock.changePercent,
     pnlPercent,
     quantity: holding.quantity,
     availableQuantity: holding.availableQuantity,

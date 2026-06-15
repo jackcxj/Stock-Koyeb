@@ -17,6 +17,7 @@ const SAMPLE_OCR_TEXT = `光迅科技 20,497.00 -830.75 -3.820% 100 100 213.120 
 名臣健康 2,000.00 -218.49 -9.580% 100 100 22.120 20.000`;
 
 const SYNC_RECORDS_KEY = 'a-share-watchtower:pnl-records';
+const HOLDINGS_KEY = 'a-share-watchtower:holdings';
 const WECHAT_WEBHOOK_KEY = 'a-share-watchtower:wechat-webhook';
 const WECHAT_SENT_ALERTS_KEY = 'a-share-watchtower:wechat-sent-alerts';
 
@@ -29,8 +30,8 @@ interface SyncRecord {
 }
 
 export default function App() {
-  const [holdings, setHoldings] = useState<Holding[]>(demoHoldings);
-  const [screenshotSynced, setScreenshotSynced] = useState(false);
+  const [holdings, setHoldings] = useState<Holding[]>(() => loadSavedHoldings() ?? demoHoldings);
+  const [screenshotSynced, setScreenshotSynced] = useState(() => Boolean(loadSavedHoldings()));
   const [ocrText, setOcrText] = useState(SAMPLE_OCR_TEXT);
   const [parsed, setParsed] = useState<ParsedHolding[]>([]);
   const [syncRecords, setSyncRecords] = useState<SyncRecord[]>(() => loadSyncRecords());
@@ -165,6 +166,7 @@ export default function App() {
     const nextHoldings = items.map(holdingFromParsed);
     setHoldings(nextHoldings);
     setScreenshotSynced(true);
+    saveHoldings(nextHoldings);
     void refreshHoldingAnalysis(nextHoldings);
 
     const record = createSyncRecord(nextHoldings);
@@ -315,6 +317,7 @@ export default function App() {
                 <dl className="positionMetrics">
                   <div><dt>市值</dt><dd>{formatMoneyWithUnit(analysis.marketValue)}</dd></div>
                   <div><dt>盈亏</dt><dd className={signedClass(analysis.pnlAmount)}>{formatMoneyWithUnit(analysis.pnlAmount)}</dd></div>
+                  <div><dt>今日涨跌</dt><dd className={signedClass(analysis.changePercent)}>{formatSignedPercent(analysis.changePercent)}</dd></div>
                   <div><dt>持仓/可用</dt><dd>{formatShares(analysis)}</dd></div>
                   <div><dt>成本/现价</dt><dd>{formatCostPrice(analysis)}</dd></div>
                 </dl>
@@ -436,6 +439,23 @@ function loadSyncRecords(): SyncRecord[] {
 function saveSyncRecords(records: SyncRecord[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(SYNC_RECORDS_KEY, JSON.stringify(records));
+}
+
+function loadSavedHoldings(): Holding[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(HOLDINGS_KEY);
+    if (!raw) return null;
+    const holdings = JSON.parse(raw);
+    return Array.isArray(holdings) && holdings.length > 0 ? holdings : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveHoldings(holdings: Holding[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(HOLDINGS_KEY, JSON.stringify(holdings));
 }
 
 function loadWechatWebhook(): string {

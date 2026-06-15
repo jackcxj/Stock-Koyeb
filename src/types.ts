@@ -59,6 +59,7 @@ export interface HoldingAnalysis {
   action: Action;
   level: AlertLevel;
   currentPrice: number;
+  changePercent?: number;
   pnlPercent: number;
   quantity?: number;
   availableQuantity?: number;

@@ -40,6 +40,7 @@ describe('api', () => {
           action: 'reduce',
           level: 'warning',
           current_price: 205.4,
+          change_percent: -1.8,
           pnl_percent: -3.62,
           risks: ['大盘偏弱'],
           growth_points: ['等待企稳'],
@@ -51,6 +52,7 @@ describe('api', () => {
     const analyses = await fetchHoldingAnalysis();
 
     expect(analyses?.[0].currentPrice).toBe(205.4);
+    expect(analyses?.[0].changePercent).toBe(-1.8);
     expect(analyses?.[0].growthPoints[0]).toBe('等待企稳');
   });
 

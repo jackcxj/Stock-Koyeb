@@ -81,6 +81,7 @@ def analyze_holding(holding: dict[str, Any], stock: dict[str, Any], market: dict
         "action": action,
         "level": level,
         "current_price": price,
+        "change_percent": change_percent,
         "pnl_percent": pnl_percent,
         "risks": risks,
         "growth_points": growth_points,
