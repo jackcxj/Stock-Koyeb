@@ -26,9 +26,38 @@ class NotifierTests(unittest.TestCase):
         self.assertEqual(_normalize_webhook_url("https://www.pushplus.plus/send/abc123"), "https://www.pushplus.plus/send")
         self.assertEqual(_build_payload("https://www.pushplus.plus/send/abc123", "标题", "内容")["token"], "abc123")
 
+    def test_accepts_wxpusher_credentials(self):
+        self.assertEqual(
+            _normalize_webhook_url("wxpusher:AT_abc:UID_xyz"),
+            "https://wxpusher.zjiecode.com/api/send/message",
+        )
+        self.assertEqual(
+            _build_payload("wxpusher:AT_abc:UID_xyz", "标题", "内容"),
+            {
+                "appToken": "AT_abc",
+                "content": "标题\n\n内容",
+                "summary": "标题",
+                "contentType": 1,
+                "uids": ["UID_xyz"],
+                "verifyPayType": 0,
+            },
+        )
+
     def test_checks_provider_response_codes(self):
         self.assertTrue(_is_successful_response("pushplus:abc123", httpx.Response(200, json={"code": 200})))
         self.assertFalse(_is_successful_response("pushplus:bad", httpx.Response(200, json={"code": 903})))
+        self.assertTrue(
+            _is_successful_response(
+                "wxpusher:AT_abc:UID_xyz",
+                httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 1000}]}),
+            )
+        )
+        self.assertFalse(
+            _is_successful_response(
+                "wxpusher:AT_abc:UID_xyz",
+                httpx.Response(200, json={"code": 1000, "success": True, "data": [{"code": 2000}]}),
+            )
+        )
         self.assertTrue(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 0})))
         self.assertFalse(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 40001})))
 

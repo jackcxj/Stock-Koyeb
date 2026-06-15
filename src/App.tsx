@@ -172,7 +172,7 @@ export default function App() {
   async function testWechatWebhook() {
     const nextUrl = wechatWebhookUrl.trim();
     if (!nextUrl) {
-      setWechatStatus('请先填写 Server 酱 SendKey、PushPlus token 或完整 URL。');
+      setWechatStatus('请先填写 WxPusher、Server 酱或 PushPlus 的推送配置。');
       return;
     }
 
@@ -218,11 +218,11 @@ export default function App() {
                 {notificationEnabled ? '浏览器提醒已开启' : '开启浏览器提醒'}
               </button>
               <label>
-                <span>微信推送 webhook</span>
+                <span>微信推送配置</span>
                 <input
                   value={wechatWebhookUrl}
                   onChange={(event) => setWechatWebhookUrl(event.target.value)}
-                  placeholder="Server 酱 SendKey / PushPlus token 或完整 URL"
+                  placeholder="wxpusher:AT_xxx:UID_xxx / Server 酱 SendKey / PushPlus token"
                 />
               </label>
               <div className="reminderActions">
