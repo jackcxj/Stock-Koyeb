@@ -172,7 +172,7 @@ export default function App() {
   async function testWechatWebhook() {
     const nextUrl = wechatWebhookUrl.trim();
     if (!nextUrl) {
-      setWechatStatus('请先填写 Server 酱或 PushPlus webhook。');
+      setWechatStatus('请先填写 Server 酱 SendKey、PushPlus token 或完整 URL。');
       return;
     }
 
@@ -222,7 +222,7 @@ export default function App() {
                 <input
                   value={wechatWebhookUrl}
                   onChange={(event) => setWechatWebhookUrl(event.target.value)}
-                  placeholder="Server 酱 SendKey URL 或 PushPlus webhook"
+                  placeholder="Server 酱 SendKey / PushPlus token 或完整 URL"
                 />
               </label>
               <div className="reminderActions">

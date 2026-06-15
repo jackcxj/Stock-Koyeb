@@ -138,7 +138,7 @@ describe('App', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '开启提醒' }));
-    fireEvent.change(screen.getByPlaceholderText('Server 酱 SendKey URL 或 PushPlus webhook'), {
+    fireEvent.change(screen.getByPlaceholderText('Server 酱 SendKey / PushPlus token 或完整 URL'), {
       target: { value: 'https://sctapi.ftqq.com/example.send' }
     });
     fireEvent.click(screen.getByRole('button', { name: '发送微信测试' }));
