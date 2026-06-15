@@ -14,7 +14,7 @@ async def send_wechat_webhook(webhook_url: str, title: str, content: str) -> boo
     payload = _build_payload(webhook_url, title, content)
     async with httpx.AsyncClient(timeout=8) as client:
         response = await client.post(target_url, json=payload)
-        return response.status_code < 400
+        return _is_successful_response(webhook_url, response)
 
 
 def _build_payload(webhook_url: str, title: str, content: str) -> dict[str, str]:
@@ -44,3 +44,16 @@ def _extract_pushplus_token(value: str) -> str:
     if "/" not in compact:
         return compact
     return compact.rstrip("/").split("/")[-1]
+
+
+def _is_successful_response(webhook_url: str, response: httpx.Response) -> bool:
+    if response.status_code >= 400:
+        return False
+    try:
+        payload = response.json()
+    except ValueError:
+        return True
+    code = payload.get("code")
+    if _is_pushplus(webhook_url):
+        return code == 200
+    return code in (0, None)

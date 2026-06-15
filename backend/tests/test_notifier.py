@@ -1,6 +1,8 @@
 import unittest
 
-from app.notifier import _build_payload, _normalize_webhook_url
+import httpx
+
+from app.notifier import _build_payload, _is_successful_response, _normalize_webhook_url
 
 
 class NotifierTests(unittest.TestCase):
@@ -23,6 +25,12 @@ class NotifierTests(unittest.TestCase):
         self.assertEqual(_build_payload("pushplus:abc123", "标题", "内容")["token"], "abc123")
         self.assertEqual(_normalize_webhook_url("https://www.pushplus.plus/send/abc123"), "https://www.pushplus.plus/send")
         self.assertEqual(_build_payload("https://www.pushplus.plus/send/abc123", "标题", "内容")["token"], "abc123")
+
+    def test_checks_provider_response_codes(self):
+        self.assertTrue(_is_successful_response("pushplus:abc123", httpx.Response(200, json={"code": 200})))
+        self.assertFalse(_is_successful_response("pushplus:bad", httpx.Response(200, json={"code": 903})))
+        self.assertTrue(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 0})))
+        self.assertFalse(_is_successful_response("SCT123456abcdef", httpx.Response(200, json={"code": 40001})))
 
 
 if __name__ == "__main__":
