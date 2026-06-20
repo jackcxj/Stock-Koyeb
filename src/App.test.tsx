@@ -44,10 +44,39 @@ describe('App', () => {
         : { items: [] }
     })));
 
-    render(<App />);
+    render(<App now={() => new Date('2026-06-18T10:00:00+08:00')} />);
 
     await waitFor(() => expect(screen.getByText(/后台实时更新/)).toBeInTheDocument());
     expect(await screen.findByText('盘中')).toBeInTheDocument();
+  });
+
+  it('does not refresh holding prices outside A-share trading hours', async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => String(url).includes('/market/latest')
+        ? {
+          id: 'closed-market',
+          index_name: '上证指数',
+          index_change_percent: -0.4,
+          market_status: '已收盘',
+          indices: [],
+          rising_count: 1500,
+          falling_count: 3900,
+          total_turnover: 100000000,
+          source_status: 'ok',
+          captured_at: '2026-06-20T15:00:00+08:00'
+        }
+        : { items: [] }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App now={() => new Date('2026-06-21T03:36:40+08:00')} />);
+
+    expect(await screen.findByText(/非交易时段 · 最近行情 2026\/06\/20 15:00:00/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/analysis/holdings'),
+      expect.anything()
+    );
   });
 
   it('automatically syncs screenshot holdings, removes absent stocks, and records pnl', async () => {
@@ -118,7 +147,7 @@ describe('App', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App />);
+    render(<App now={() => new Date('2026-06-18T10:00:00+08:00')} />);
     await screen.findByText('长江电力');
     fireEvent.click(screen.getByRole('button', { name: '识别并同步' }));
 
@@ -204,7 +233,7 @@ describe('App', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<App />);
+    render(<App now={() => new Date('2026-06-18T10:00:00+08:00')} />);
 
     const holdingsPanel = screen.getByText('持仓风险').closest('article');
     expect(holdingsPanel).not.toBeNull();

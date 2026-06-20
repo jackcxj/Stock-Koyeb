@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Holding, HoldingAnalysis, MarketSnapshot, ParsedHolding } from './types';
 import { demoAlerts, demoHoldings, demoMarket, demoStocks } from './lib/demoData';
 import { fetchHoldingAnalysis, fetchLatestMarket, sendWechatAlert, sendWechatTestAlert } from './lib/api';
-import { formatChinaDateTime, formatSignedPercent } from './lib/marketFormat';
+import { formatChinaDateTime, formatSignedPercent, isAShareTradingSession } from './lib/marketFormat';
 import { actionLabel, analyzeHolding, classifyMarketTrend } from './lib/stockRules';
 import { parseHoldingsFromOcrText, recognizeHoldingsImage } from './lib/ocr';
 
@@ -29,7 +29,13 @@ interface SyncRecord {
   totalPnlAmount: number;
 }
 
-export default function App() {
+interface AppProps {
+  now?: () => Date;
+}
+
+const systemNow = () => new Date();
+
+export default function App({ now = systemNow }: AppProps = {}) {
   const [holdings, setHoldings] = useState<Holding[]>(() => loadSavedHoldings() ?? demoHoldings);
   const [screenshotSynced, setScreenshotSynced] = useState(() => Boolean(loadSavedHoldings()));
   const [ocrText, setOcrText] = useState(SAMPLE_OCR_TEXT);
@@ -47,49 +53,69 @@ export default function App() {
   const [holdingSourceLabel, setHoldingSourceLabel] = useState('持仓行情等待同步');
 
   const refreshHoldingAnalysis = useCallback(async (nextHoldings: Holding[]) => {
+    if (!isAShareTradingSession(now())) {
+      setHoldingSourceLabel('非交易时段 · 使用截图价格，开盘后自动更新');
+      return false;
+    }
     setHoldingSourceLabel('持仓行情同步中...');
     const nextAnalyses = await fetchHoldingAnalysis(nextHoldings);
     if (nextAnalyses?.length) {
       setRemoteAnalyses(nextAnalyses);
-      setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(new Date().toISOString())}`);
+      setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(now().toISOString())}`);
       return true;
     }
     setHoldingSourceLabel('持仓行情同步失败，暂用截图价格');
     return false;
-  }, []);
+  }, [now]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function refreshFromBackend() {
-      const [nextMarket, nextAnalyses] = await Promise.all([
-        fetchLatestMarket(),
-        fetchHoldingAnalysis(screenshotSynced ? holdings : undefined)
-      ]);
+    let latestCapturedAt = market.capturedAt;
+
+    async function refreshFromBackend(initial = false) {
+      const tradingSession = isAShareTradingSession(now());
+      if (!initial && !tradingSession) {
+        setHoldingSourceLabel(`非交易时段 · 最近行情 ${formatChinaDateTime(latestCapturedAt)}`);
+        return;
+      }
+
+      const nextMarket = await fetchLatestMarket();
       if (cancelled) return;
       if (nextMarket) {
+        latestCapturedAt = nextMarket.capturedAt;
         setMarket(nextMarket);
         setDataSourceLabel(
-          nextMarket.sourceStatus === 'ok'
+          !tradingSession
+            ? `后台最近收盘 · ${formatChinaDateTime(nextMarket.capturedAt)}`
+            : nextMarket.sourceStatus === 'ok'
             ? `后台实时更新 · ${formatChinaDateTime(nextMarket.capturedAt)}`
             : `后台旧快照 · ${formatChinaDateTime(nextMarket.capturedAt)}`
         );
       } else {
         setDataSourceLabel('后台连接失败，显示本地演示数据');
       }
+
+      if (!tradingSession) {
+        setHoldingSourceLabel(`非交易时段 · 最近行情 ${formatChinaDateTime(nextMarket?.capturedAt ?? latestCapturedAt)}`);
+        return;
+      }
+
+      const nextAnalyses = await fetchHoldingAnalysis(screenshotSynced ? holdings : undefined);
+      if (cancelled) return;
       if (nextAnalyses) {
         setRemoteAnalyses(nextAnalyses);
-        setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(new Date().toISOString())}`);
+        setHoldingSourceLabel(`持仓行情实时更新 · ${formatChinaDateTime(now().toISOString())}`);
       }
     }
 
-    void refreshFromBackend();
+    void refreshFromBackend(true);
     const timer = window.setInterval(() => void refreshFromBackend(), 30000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [holdings, screenshotSynced]);
+  }, [holdings, now, screenshotSynced]);
 
   const marketTrend = classifyMarketTrend(market);
   const localAnalyses = useMemo(
@@ -112,7 +138,7 @@ export default function App() {
 
   useEffect(() => {
     const webhookUrl = wechatWebhookUrl.trim();
-    if (!webhookUrl || generatedAlerts.length === 0) return;
+    if (!webhookUrl || generatedAlerts.length === 0 || !isAShareTradingSession(now())) return;
 
     let cancelled = false;
     const sentKeys = loadWechatSentAlertKeys();
@@ -138,7 +164,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [generatedAlerts, wechatWebhookUrl]);
+  }, [generatedAlerts, now, wechatWebhookUrl]);
 
   function addParsedHoldings() {
     const next = parseHoldingsFromOcrText(ocrText);
@@ -175,7 +201,11 @@ export default function App() {
       saveSyncRecords(nextRecords);
       return nextRecords;
     });
-    setOcrStatus(`已自动同步 ${items.length} 只持仓；截图外股票已从中间持仓列表移除，并开始刷新实时行情。`);
+    setOcrStatus(
+      isAShareTradingSession(now())
+        ? `已自动同步 ${items.length} 只持仓；截图外股票已从中间持仓列表移除，并开始刷新实时行情。`
+        : `已自动同步 ${items.length} 只持仓；当前为非交易时段，保留截图价格，开盘后自动更新。`
+    );
   }
 
   async function requestNotificationPermission() {
