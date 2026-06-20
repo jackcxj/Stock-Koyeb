@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseHoldingsFromOcrText } from './ocr';
+import { mergeHoldingCandidates, parseHoldingsFromOcrText, toOcrBinaryValue } from './ocr';
 
 describe('parseHoldingsFromOcrText', () => {
   it('extracts manually confirmable holdings from Tonghuashun-style OCR text', () => {
@@ -115,5 +115,63 @@ describe('parseHoldingsFromOcrText', () => {
       expect.objectContaining({ symbol: 'SZ001267', name: '汇绿生态', marketValue: 4950, pnlAmount: -1159.98, pnlPercent: -18.88, quantity: 100, availableQuantity: 100, costPrice: 61.02, currentPrice: 49.5 }),
       expect.objectContaining({ symbol: 'SZ002919', name: '名臣健康', marketValue: 2000, pnlAmount: -218.49, pnlPercent: -9.58, quantity: 100, availableQuantity: 100, costPrice: 22.12, currentPrice: 20 })
     ]);
+  });
+
+  it('extracts every holding from the latest dark Tonghuashun screenshot', () => {
+    const text = `
+风华 高 科 482.04 200 72.125
+14,920.00 3.430% 200 74.600
+工业 富 联 877.45 100 69.211
+7,808.00 12.810% 100 78.080
+中 兴 通 讯 -48.29 200 38.085
+7,578.00 -0.510% 200 37.890
+通 富 微 电 -377.91 100 71.960
+6,827.00 -5.130% 100 68.270
+豫 能 控股 -337.48 300 20.947
+5,955.00 -5.240% 300 19.850
+汇 绿 生态 -300.41 100 61.020
+5,810.00 -4.790% 100 58.100
+许 继 电 气 -1,116.94 100 33.983
+2,288.00 -32.670% 100 22.880
+`;
+
+    const holdings = parseHoldingsFromOcrText(text);
+    expect(holdings.map((holding) => holding.symbol)).toEqual([
+      'SZ000636',
+      'SH601138',
+      'SZ000063',
+      'SZ002156',
+      'SZ001896',
+      'SZ001267',
+      'SZ000400'
+    ]);
+    expect(holdings[0]).toEqual(expect.objectContaining({ marketValue: 14920, pnlAmount: 482.04, quantity: 200, costPrice: 72.125, currentPrice: 74.6 }));
+    expect(holdings[6]).toEqual(expect.objectContaining({ marketValue: 2288, pnlAmount: -1116.94, quantity: 100, costPrice: 33.983, currentPrice: 22.88 }));
+  });
+
+  it('turns a dark screenshot background white while preserving colored and gray text', () => {
+    expect(toOcrBinaryValue(8, 8, 8)).toBe(255);
+    expect(toOcrBinaryValue(235, 55, 48)).toBe(0);
+    expect(toOcrBinaryValue(45, 120, 190)).toBe(0);
+    expect(toOcrBinaryValue(170, 170, 170)).toBe(0);
+  });
+
+  it('merges OCR passes and keeps the most internally consistent candidate per stock', () => {
+    const base = {
+      symbol: 'SZ002156',
+      name: '通富微电',
+      marketValue: 6827,
+      pnlPercent: -5.13,
+      quantity: 100,
+      availableQuantity: 100,
+      costPrice: 71.96,
+      currentPrice: 68.27,
+      stopLossPrice: 64.52
+    };
+
+    expect(mergeHoldingCandidates([
+      [{ ...base, pnlAmount: 371.91 }],
+      [{ ...base, pnlAmount: -377.91 }]
+    ])[0].pnlAmount).toBe(-377.91);
   });
 });
